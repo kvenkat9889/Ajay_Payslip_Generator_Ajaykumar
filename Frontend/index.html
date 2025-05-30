@@ -542,8 +542,8 @@
                         params.append('year', year);
                     }
 
-                    console.log(`[${new Date().toISOString()}] Fetching payslips: http://localhost:3000/api/payslips/history?${params.toString()}`);
-                    const response = await fetch(`http://localhost:3000/api/payslips/history?${params.toString()}`);
+                    console.log(`[${new Date().toISOString()}] Fetching payslips: http://54.166.206.245:3111/api/payslips/history?${params.toString()}`);
+                    const response = await fetch(`http://54.166.206.245:3111/api/payslips/history?${params.toString()}`);
                     if (!response.ok) {
                         const errorData = await response.json().catch(() => ({}));
                         throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);

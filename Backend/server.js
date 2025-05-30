@@ -4,7 +4,7 @@ const cors = require('cors');
 const path = require('path');
 
 const app = express();
-const port = 3000;
+const port = 3111;
 
 // Middleware
 app.use(cors());
@@ -13,9 +13,9 @@ app.use('/static', express.static(path.join(__dirname, 'public')));
 
 const pool = new Pool({
     user: 'postgres',
-    host: 'localhost',
+    host: 'postgres',
     database: 'new_employee_db',
-    password: 'Password@12345',
+    password: 'admin123',
     port: 5432
 });
 
@@ -311,8 +311,8 @@ app.get('/api/payslips/:id', async (req, res) => {
 });
 
 // Start server
-app.listen(port, '192.168.1.100', () => {
-    console.log(`[${new Date().toISOString()}] Server running on http://192.168.1.100:${port}`);
+app.listen(port, '0.0.0.0', () => {
+    console.log(`[${new Date().toISOString()}] Server running on http://54.166.206.245:${port}`);
 });
 
 // Error handling for uncaught exceptions
