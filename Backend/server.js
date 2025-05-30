@@ -311,8 +311,8 @@ app.get('/api/payslips/:id', async (req, res) => {
 });
 
 // Start server
-app.listen(port, () => {
-    console.log(`[${new Date().toISOString()}] Server running on http://localhost:${port}`);
+app.listen(port, '192.168.1.100', () => {
+    console.log(`[${new Date().toISOString()}] Server running on http://192.168.1.100:${port}`);
 });
 
 // Error handling for uncaught exceptions
