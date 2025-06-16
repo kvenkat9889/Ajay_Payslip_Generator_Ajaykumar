@@ -590,6 +590,7 @@
                                     <option value="Hyderabad">Hyderabad</option>
                                     <option value="Bangalore">Bangalore</option>
                                     <option value="Pune">Pune</option>
+                                    
                                 </select>
                                 <div class="invalid-feedback">Please select an office location</div>
                             </div>
@@ -803,650 +804,674 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const { jsPDF } = window.jspdf;
-           const logoImg = new Image();
-                logoImg.crossOrigin = 'Anonymous'; // Important for CORS if needed
-                logoImg.src = './logo.png'; // Path to your logo
+   <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const { jsPDF } = window.jspdf;
+        const logoImg = new Image();
+        logoImg.crossOrigin = 'Anonymous';
+        logoImg.src = 'http://3.88.203.125:3111/upload/logo.png'; // Updated to /upload
+        logoImg.onerror = () => {
+            console.warn('Logo failed to load, using placeholder');
+            logoImg.src = 'https://via.placeholder.com/100x40?text=Logo';
+        };
 
-            let isSubmitting = false;
+        let isSubmitting = false;
 
-            // Number to words conversion
-            function numberToWords(num) {
-                if (num === 0) return 'Zero Only';
-                if (num > 9999999) return 'Amount too large';
+        // numberToWords function
+        function numberToWords(num) {
+            if (num === 0) return 'Zero Only';
+            if (num > 9999999) return 'Amount too large';
 
-                const ones = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
-                const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
-                const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+            const ones = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+            const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+            const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
 
-                function convertHundreds(n) {
-                    let str = '';
-                    if (n > 99) {
-                        str += ones[Math.floor(n / 100)] + ' Hundred';
-                        n %= 100;
-                        if (n > 0) str += ' and ';
-                    }
-                    if (n > 19) {
-                        str += tens[Math.floor(n / 10)];
-                        n %= 10;
-                        if (n > 0) str += ' ' + ones[n];
-                    } else if (n > 9) {
-                        str += teens[n - 10];
-                    } else if (n > 0) {
-                        str += ones[n];
-                    }
-                    return str;
-                }
-
+            function convertHundreds(n) {
                 let str = '';
-                let lakh = Math.floor(num / 100000);
-                num %= 100000;
-                let thousand = Math.floor(num / 1000);
-                num %= 1000;
-
-                if (lakh > 0) {
-                    str += convertHundreds(lakh) + ' Lakh';
-                    if (thousand > 0 || num > 0) str += ' ';
+                if (n > 99) {
+                    str += ones[Math.floor(n / 100)] + ' Hundred';
+                    n %= 100;
+                    if (n > 0) str += ' and ';
                 }
-                if (thousand > 0) {
-                    str += convertHundreds(thousand) + ' Thousand';
-                    if (num > 0) str += ' ';
+                if (n > 19) {
+                    str += tens[Math.floor(n / 10)];
+                    n %= 10;
+                    if (n > 0) str += ' ' + ones[n];
+                } else if (n > 9) {
+                    str += teens[n - 10];
+                } else if (n > 0) {
+                    str += ones[n];
                 }
-                if (num > 0) {
-                    str += convertHundreds(num);
-                }
-
-                return str.trim() + ' Only';
+                return str;
             }
 
-            // Tab navigation
-            const tabButtons = document.querySelectorAll('.tab-btn');
-            tabButtons.forEach(button => {
-                button.addEventListener('click', () => {
-                    tabButtons.forEach(btn => btn.classList.remove('active'));
-                    document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
-                    button.classList.add('active');
-                    document.getElementById(button.dataset.id + 'Tab').classList.add('active');
-                    if (button.dataset.id === 'details') {
-                        loadPayslipHistory();
-                    }
+            let str = '';
+            let lakh = Math.floor(num / 100000);
+            num %= 100000;
+            let thousand = Math.floor(num / 1000);
+            num %= 1000;
+
+            if (lakh > 0) {
+                str += convertHundreds(lakh) + ' Lakh';
+                if (thousand > 0 || num > 0) str += ' ';
+            }
+            if (thousand > 0) {
+                str += convertHundreds(thousand) + ' Thousand';
+                if (num > 0) str += ' ';
+            }
+            if (num > 0) {
+                str += convertHundreds(num);
+            }
+
+            return str.trim() + ' Only';
+        }
+
+        // Tab navigation
+        const tabButtons = document.querySelectorAll('.tab-btn');
+        tabButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                tabButtons.forEach(btn => btn.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+                button.classList.add('active');
+                document.getElementById(button.dataset.id + 'Tab').classList.add('active');
+                if (button.dataset.id === 'details') {
+                    loadPayslipHistory();
+                }
+            });
+        });
+
+        // Form elements
+        const payslipForm = document.getElementById('payslipForm');
+        const employeeIdInput = document.getElementById('employeeId');
+        const employeeNameInput = document.getElementById('employeeName');
+        const employeeEmailInput = document.getElementById('employeeEmail');
+        const monthYearInput = document.getElementById('monthYear');
+        const designationInput = document.getElementById('designation');
+        const officeLocationInput = document.getElementById('officeLocation');
+        const employmentTypeInput = document.getElementById('employmentType');
+        const dateOfJoiningInput = document.getElementById('dateOfJoining');
+        const workingDaysInput = document.getElementById('workingDays');
+        const bankNameInput = document.getElementById('bankName');
+        const panNoInput = document.getElementById('panNo');
+        const bankAccountNoInput = document.getElementById('bankAccountNo');
+        const pfNoInput = document.getElementById('pfNo');
+        const uanNoInput = document.getElementById('uanNo');
+        const esicNoInput = document.getElementById('esicNo');
+        const netSalaryDisplay = document.getElementById('netSalary');
+        const successMessage = document.getElementById('successMessage');
+        const errorMessage = document.getElementById('errorMessage');
+        const submitBtn = document.getElementById('submitBtn');
+        const numberInputs = document.querySelectorAll('input[inputmode="numeric"]');
+
+        // Set current month as default
+        const today = new Date();
+        monthYearInput.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+
+        // Set date constraints
+        dateOfJoiningInput.max = today.toISOString().split('T')[0];
+        dateOfJoiningInput.min = '2021-01-01';
+
+        // Input validations
+        employeeIdInput.addEventListener('input', () => {
+            const isValid = /^ATS0[0-9]{3}$/.test(employeeIdInput.value) && employeeIdInput.value !== 'ATS0000';
+            employeeIdInput.classList.toggle('is-invalid', !isValid);
+        });
+
+        employeeNameInput.addEventListener('input', () => {
+            const isValid = /^[a-zA-Z]+(?:\s[a-zA-Z]+)*$/.test(employeeNameInput.value);
+            employeeNameInput.classList.toggle('is-invalid', !isValid);
+        });
+
+        employeeEmailInput.addEventListener('input', () => {
+            const isValid = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.(com|in|org|co\.in)$/i.test(employeeEmailInput.value);
+            employeeEmailInput.classList.toggle('is-invalid', !isValid);
+        });
+
+        monthYearInput.addEventListener('input', () => {
+            const value = monthYearInput.value;
+            const date = value ? new Date(value + '-01') : null;
+            const isValid = date && date >= new Date('2021-01-01') && date <= new Date('2025-05-01');
+            monthYearInput.classList.toggle('is-invalid', !isValid);
+        });
+
+        designationInput.addEventListener('change', () => {
+            const isValid = designationInput.value !== '';
+            designationInput.classList.toggle('is-invalid', !isValid);
+        });
+
+        officeLocationInput.addEventListener('change', () => {
+            const isValid = ['Hyderabad', 'Bangalore', 'Pune', 'Chennai', 'Delhi'].includes(officeLocationInput.value);
+            officeLocationInput.classList.toggle('is-invalid', !isValid);
+        });
+
+        employmentTypeInput.addEventListener('change', () => {
+            const isValid = ['Permanent', 'Contract', 'Temporary', 'Intern'].includes(employmentTypeInput.value);
+            employmentTypeInput.classList.toggle('is-invalid', !isValid);
+        });
+
+        dateOfJoiningInput.addEventListener('input', () => {
+            const date = new Date(dateOfJoiningInput.value);
+            const minDate = new Date('2021-01-01');
+            const isValid = date && date >= minDate && date <= today;
+            dateOfJoiningInput.classList.toggle('is-invalid', !isValid);
+        });
+
+        workingDaysInput.addEventListener('input', () => {
+            const value = parseInt(workingDaysInput.value);
+            const isValid = value >= 1 && value <= 31;
+            workingDaysInput.classList.toggle('is-invalid', !isValid);
+        });
+
+        bankNameInput.addEventListener('input', () => {
+            const isValid = /^[a-zA-Z\s]+$/.test(bankNameInput.value);
+            bankNameInput.classList.toggle('is-invalid', !isValid);
+        });
+
+        panNoInput.addEventListener('input', () => {
+            const isValid = /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(panNoInput.value);
+            panNoInput.classList.toggle('is-invalid', !isValid);
+        });
+
+        bankAccountNoInput.addEventListener('input', () => {
+            const isValid = /^\d{10,18}$/.test(bankAccountNoInput.value);
+            bankAccountNoInput.classList.toggle('is-invalid', !isValid);
+        });
+
+        pfNoInput.addEventListener('input', () => {
+            const isValid = /^[A-Z0-9]{12,22}$/.test(pfNoInput.value);
+            pfNoInput.classList.toggle('is-invalid', !isValid);
+        });
+
+        uanNoInput.addEventListener('input', () => {
+            const isValid = /^\d{12}$/.test(uanNoInput.value);
+            uanNoInput.classList.toggle('is-invalid', !isValid);
+        });
+
+        esicNoInput.addEventListener('input', () => {
+            const isValid = /^[A-Z0-9]{10,17}$/.test(esicNoInput.value);
+            esicNoInput.classList.toggle('is-invalid', !isValid);
+        });
+
+        numberInputs.forEach(input => {
+            input.addEventListener('input', () => {
+                input.value = input.value.replace(/[^0-9.]/g, '');
+                const value = parseFloat(input.value) || 0;
+                if (input.id === 'basicSalary') {
+                    input.classList.toggle('is-invalid', value <= 0);
+                } else {
+                    input.classList.toggle('is-invalid', value < 0);
+                }
+                calculateNetSalary();
+            });
+        });
+
+        // Calculate net salary
+        function calculateNetSalary() {
+            const earnings = ['basicSalary', 'hra', 'otherAllowance']
+                .reduce((sum, id) => sum + (parseFloat(document.getElementById(id).value) || 0), 0);
+            const deductions = ['professionalTax', 'tds', 'providentFund', 'lwp', 'otherDeduction']
+                .reduce((sum, id) => sum + (parseFloat(document.getElementById(id).value) || 0), 0);
+            const netSalary = earnings - deductions;
+            netSalaryDisplay.textContent = `₹${netSalary.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+        }
+
+        // Form validation
+        function validateForm() {
+            let isValid = true;
+            const errors = [];
+
+            if (!/^ATS0[0-9]{3}$/.test(employeeIdInput.value) || employeeIdInput.value === 'ATS0000') {
+                employeeIdInput.classList.add('is-invalid');
+                errors.push('Invalid Employee ID (format: ATS0XXX)');
+                isValid = false;
+            }
+
+            if (!/^[a-zA-Z]+(?:\s[a-zA-Z]+)*$/.test(employeeNameInput.value)) {
+                employeeNameInput.classList.add('is-invalid');
+                errors.push('Name must contain only letters and single spaces');
+                isValid = false;
+            }
+
+            if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.(com|in|org|co\.in)$/i.test(employeeEmailInput.value)) {
+                employeeEmailInput.classList.add('is-invalid');
+                errors.push('Invalid email format');
+                isValid = false;
+            }
+
+            const dateValue = monthYearInput.value;
+            const date = dateValue ? new Date(dateValue + '-01') : null;
+            if (!date || date < new Date('2021-01-01') || date > new Date('2025-05-01')) {
+                monthYearInput.classList.add('is-invalid');
+                errors.push('Invalid month/year selection');
+                isValid = false;
+            }
+
+            if (designationInput.value === '') {
+                designationInput.classList.add('is-invalid');
+                errors.push('Please select a valid designation');
+                isValid = false;
+            }
+
+            if (!['Hyderabad', 'Bangalore', 'Pune', 'Chennai', 'Delhi'].includes(officeLocationInput.value)) {
+                officeLocationInput.classList.add('is-invalid');
+                errors.push('Please select a valid office location');
+                isValid = false;
+            }
+
+            if (!['Permanent', 'Contract', 'Temporary', 'Intern'].includes(employmentTypeInput.value)) {
+                employmentTypeInput.classList.add('is-invalid');
+                errors.push('Please select a valid employment type');
+                isValid = false;
+            }
+
+            const doj = new Date(dateOfJoiningInput.value);
+            const minDate = new Date('2021-01-01');
+            if (!doj || doj < minDate || doj > today) {
+                dateOfJoiningInput.classList.add('is-invalid');
+                errors.push('Date of joining must be between Jan 2021 and today');
+                isValid = false;
+            }
+
+            const workingDays = parseInt(workingDaysInput.value);
+            if (isNaN(workingDays) || workingDays < 1 || workingDays > 31) {
+                workingDaysInput.classList.add('is-invalid');
+                errors.push('Working days must be between 1 and 31');
+                isValid = false;
+            }
+
+            if (!/^[a-zA-Z\s]+$/.test(bankNameInput.value)) {
+                bankNameInput.classList.add('is-invalid');
+                errors.push('Invalid bank name');
+                isValid = false;
+            }
+
+            if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(panNoInput.value)) {
+                panNoInput.classList.add('is-invalid');
+                errors.push('Invalid PAN number');
+                isValid = false;
+            }
+
+            if (!/^\d{10,18}$/.test(bankAccountNoInput.value)) {
+                bankAccountNoInput.classList.add('is-invalid');
+                errors.push('Invalid bank account number');
+                isValid = false;
+            }
+
+            if (!/^[A-Z0-9]{12,22}$/.test(pfNoInput.value)) {
+                pfNoInput.classList.add('is-invalid');
+                errors.push('Invalid PF number');
+                isValid = false;
+            }
+
+            if (!/^\d{12}$/.test(uanNoInput.value)) {
+                uanNoInput.classList.add('is-invalid');
+                errors.push('Invalid UAN number');
+                isValid = false;
+            }
+
+            if (!/^[A-Z0-9]{10,17}$/.test(esicNoInput.value)) {
+                esicNoInput.classList.add('is-invalid');
+                errors.push('Invalid ESIC number');
+                isValid = false;
+            }
+
+            const basicSalary = parseFloat(document.getElementById('basicSalary').value) || 0;
+            if (basicSalary <= 0) {
+                document.getElementById('basicSalary').classList.add('is-invalid');
+                errors.push('Basic salary must be positive');
+                isValid = false;
+            }
+
+            const numericFields = ['hra', 'otherAllowance', 'professionalTax', 'tds', 'providentFund', 'lwp', 'otherDeduction'];
+            numericFields.forEach(id => {
+                const value = parseFloat(document.getElementById(id).value) || 0;
+                if (value < 0) {
+                    document.getElementById(id).classList.add('is-invalid');
+                    errors.push(`${id} must be non-negative`);
+                    isValid = false;
+                }
+            });
+
+            return { isValid, errors };
+        }
+
+        // Form submission
+        payslipForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (isSubmitting) return;
+
+            errorMessage.style.display = 'none';
+            successMessage.style.display = 'none';
+
+            const { isValid, errors } = validateForm();
+            if (!isValid) {
+                errorMessage.textContent = `Please correct: ${errors.join(', ')}`;
+                errorMessage.style.display = 'block';
+                return;
+            }
+
+            isSubmitting = true;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+
+            const formData = {
+                employee_id: employeeIdInput.value,
+                employee_name: employeeNameInput.value,
+                employee_email: employeeEmailInput.value,
+                month_year: new Date(monthYearInput.value + '-01').toLocaleString('en-US', { month: 'long', year: 'numeric' }),
+                designation: designationInput.value,
+                office_location: officeLocationInput.value,
+                employment_type: employmentTypeInput.value,
+                date_of_joining: dateOfJoiningInput.value,
+                working_days: parseInt(workingDaysInput.value),
+                bank_name: bankNameInput.value,
+                pan_no: panNoInput.value,
+                bank_account_no: bankAccountNoInput.value,
+                pf_no: pfNoInput.value,
+                uan_no: uanNoInput.value,
+                esic_no: esicNoInput.value,
+                basic_salary: parseFloat(document.getElementById('basicSalary').value) || 0,
+                hra: parseFloat(document.getElementById('hra').value) || 0,
+                other_allowance: parseFloat(document.getElementById('otherAllowance').value) || 0,
+                professional_tax: parseFloat(document.getElementById('professionalTax').value) || 0,
+                tds: parseFloat(document.getElementById('tds').value) || 0,
+                provident_fund: parseFloat(document.getElementById('providentFund').value) || 0,
+                lwp: parseFloat(document.getElementById('lwp').value) || 0,
+                other_deduction: parseFloat(document.getElementById('otherDeduction').value) || 0
+            };
+
+            try {
+                const response = await fetch('http://3.88.203.125:3111/api/payslips', { // Updated to 3111
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
                 });
-            });
 
-            // Form elements
-            const payslipForm = document.getElementById('payslipForm');
-            const employeeIdInput = document.getElementById('employeeId');
-            const employeeNameInput = document.getElementById('employeeName');
-            const employeeEmailInput = document.getElementById('employeeEmail');
-            const monthYearInput = document.getElementById('monthYear');
-            const designationInput = document.getElementById('designation');
-            const officeLocationInput = document.getElementById('officeLocation');
-            const employmentTypeInput = document.getElementById('employmentType');
-            const dateOfJoiningInput = document.getElementById('dateOfJoining');
-            const workingDaysInput = document.getElementById('workingDays');
-            const bankNameInput = document.getElementById('bankName');
-            const panNoInput = document.getElementById('panNo');
-            const bankAccountNoInput = document.getElementById('bankAccountNo');
-            const pfNoInput = document.getElementById('pfNo');
-            const uanNoInput = document.getElementById('uanNo');
-            const esicNoInput = document.getElementById('esicNo');
-            const netSalaryDisplay = document.getElementById('netSalary');
-            const successMessage = document.getElementById('successMessage');
-            const errorMessage = document.getElementById('errorMessage');
-            const submitBtn = document.getElementById('submitBtn');
-            const numberInputs = document.querySelectorAll('input[inputmode="numeric"]');
+                const contentType = response.headers.get('Content-Type') || '';
+                const text = await response.text();
+                console.log('Raw POST response:', text);
 
-            // Set current month as default
-            const today = new Date();
-            monthYearInput.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-
-            // Set max date for date of joining to today
-            dateOfJoiningInput.max = today.toISOString().split('T')[0];
-            // Set min date for date of joining to Jan 1, 2021
-            dateOfJoiningInput.min = '2021-01-01';
-
-            // Validations
-            employeeIdInput.addEventListener('input', () => {
-                const isValid = /^ATS0[0-9]{3}$/.test(employeeIdInput.value) && employeeIdInput.value !== 'ATS0000';
-                employeeIdInput.classList.toggle('is-invalid', !isValid);
-            });
-
-            employeeNameInput.addEventListener('input', () => {
-                const isValid = /^[a-zA-Z]+(?:\s[a-zA-Z]+)*$/.test(employeeNameInput.value);
-                employeeNameInput.classList.toggle('is-invalid', !isValid);
-            });
-
-            employeeEmailInput.addEventListener('input', () => {
-                const isValid = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.(com|in|org|co\.in)$/i.test(employeeEmailInput.value);
-                employeeEmailInput.classList.toggle('is-invalid', !isValid);
-            });
-
-            monthYearInput.addEventListener('input', () => {
-                const value = monthYearInput.value;
-                const date = value ? new Date(value + '-01') : null;
-                const isValid = date && date >= new Date('2021-01-01') && date <= new Date('2025-05-01');
-                monthYearInput.classList.toggle('is-invalid', !isValid);
-            });
-
-            designationInput.addEventListener('change', () => {
-                const isValid = designationInput.value !== '';
-                designationInput.classList.toggle('is-invalid', !isValid);
-            });
-
-            officeLocationInput.addEventListener('change', () => {
-                const isValid = ['Hyderabad', 'Bangalore', 'Pune', 'Chennai', 'Delhi'].includes(officeLocationInput.value);
-                officeLocationInput.classList.toggle('is-invalid', !isValid);
-            });
-
-            employmentTypeInput.addEventListener('change', () => {
-                const isValid = ['Permanent', 'Contract', 'Temporary', 'Intern'].includes(employmentTypeInput.value);
-                employmentTypeInput.classList.toggle('is-invalid', !isValid);
-            });
-
-            dateOfJoiningInput.addEventListener('input', () => {
-                const date = new Date(dateOfJoiningInput.value);
-                const minDate = new Date('2021-01-01');
-                const isValid = date && date >= minDate && date <= today;
-                dateOfJoiningInput.classList.toggle('is-invalid', !isValid);
-            });
-
-            workingDaysInput.addEventListener('input', () => {
-                const value = parseInt(workingDaysInput.value);
-                const isValid = value >= 1 && value <= 31;
-                workingDaysInput.classList.toggle('is-invalid', !isValid);
-            });
-
-            bankNameInput.addEventListener('input', () => {
-                const isValid = /^[a-zA-Z\s]+$/.test(bankNameInput.value);
-                bankNameInput.classList.toggle('is-invalid', !isValid);
-            });
-
-            panNoInput.addEventListener('input', () => {
-                const isValid = /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(panNoInput.value);
-                panNoInput.classList.toggle('is-invalid', !isValid);
-            });
-
-            bankAccountNoInput.addEventListener('input', () => {
-                const isValid = /^\d{10,18}$/.test(bankAccountNoInput.value);
-                bankAccountNoInput.classList.toggle('is-invalid', !isValid);
-            });
-
-            pfNoInput.addEventListener('input', () => {
-                const isValid = /^[A-Z0-9]{12,22}$/.test(pfNoInput.value);
-                pfNoInput.classList.toggle('is-invalid', !isValid);
-            });
-
-            uanNoInput.addEventListener('input', () => {
-                const isValid = /^\d{12}$/.test(uanNoInput.value);
-                uanNoInput.classList.toggle('is-invalid', !isValid);
-            });
-
-            esicNoInput.addEventListener('input', () => {
-                const isValid = /^[A-Z0-9]{10,17}$/.test(esicNoInput.value);
-                esicNoInput.classList.toggle('is-invalid', !isValid);
-            });
-
-            numberInputs.forEach(input => {
-                input.addEventListener('input', () => {
-                    input.value = input.value.replace(/[^0-9.]/g, '');
-                    const value = parseFloat(input.value) || 0;
-                    if (input.id === 'basicSalary') {
-                        input.classList.toggle('is-invalid', value <= 0);
-                    } else {
-                        input.classList.toggle('is-invalid', value < 0);
-                    }
-                    calculateNetSalary();
-                });
-            });
-
-            function calculateNetSalary() {
-                const earnings = ['basicSalary', 'hra', 'otherAllowance']
-                    .reduce((sum, id) => sum + (parseFloat(document.getElementById(id).value) || 0), 0);
-                const deductions = ['professionalTax', 'tds', 'providentFund', 'lwp', 'otherDeduction']
-                    .reduce((sum, id) => sum + (parseFloat(document.getElementById(id).value) || 0), 0);
-                const netSalary = earnings - deductions;
-                netSalaryDisplay.textContent = `₹${netSalary.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-            }
-
-            function validateForm() {
-                let isValid = true;
-                const errors = [];
-
-                if (!/^ATS0[0-9]{3}$/.test(employeeIdInput.value) || employeeIdInput.value === 'ATS0000') {
-                    employeeIdInput.classList.add('is-invalid');
-                    errors.push('Invalid Employee ID (format: ATS0XXX)');
-                    isValid = false;
+                if (!contentType.includes('application/json')) {
+                    throw new Error(`Invalid response type: ${contentType}; expected JSON`);
                 }
 
-                if (!/^[a-zA-Z]+(?:\s[a-zA-Z]+)*$/.test(employeeNameInput.value)) {
-                    employeeNameInput.classList.add('is-invalid');
-                    errors.push('Name must contain only letters and single spaces');
-                    isValid = false;
+                const result = JSON.parse(text);
+
+                if (!response.ok) {
+                    throw new Error(result.error || `HTTP error ${response.status}`);
                 }
 
-                if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.(com|in|org|co\.in)$/i.test(employeeEmailInput.value)) {
-                    employeeEmailInput.classList.add('is-invalid');
-                    errors.push('Invalid email format');
-                    isValid = false;
-                }
+                console.log('Payslip created:', result);
+                successMessage.textContent = result.message || 'Payslip generated successfully!';
+                successMessage.style.display = 'flex';
+                setTimeout(() => successMessage.style.display = 'none', 3000);
 
-                const dateValue = monthYearInput.value;
-                const date = dateValue ? new Date(dateValue + '-01') : null;
-                if (!date || date < new Date('2021-01-01') || date > new Date('2025-05-01')) {
-                    monthYearInput.classList.add('is-invalid');
-                    errors.push('Invalid month/year selection');
-                    isValid = false;
-                }
-
-                if (designationInput.value === '') {
-                    designationInput.classList.add('is-invalid');
-                    errors.push('Please select a valid designation');
-                    isValid = false;
-                }
-
-                if (!['Hyderabad', 'Bangalore', 'Pune', 'Chennai', 'Delhi'].includes(officeLocationInput.value)) {
-                    officeLocationInput.classList.add('is-invalid');
-                    errors.push('Please select a valid office location');
-                    isValid = false;
-                }
-
-                if (!['Permanent', 'Contract', 'Temporary', 'Intern'].includes(employmentTypeInput.value)) {
-                    employmentTypeInput.classList.add('is-invalid');
-                    errors.push('Please select a valid employment type');
-                    isValid = false;
-                }
-
-                const doj = new Date(dateOfJoiningInput.value);
-                const minDate = new Date('2021-01-01');
-                if (!doj || doj < minDate || doj > today) {
-                    dateOfJoiningInput.classList.add('is-invalid');
-                    errors.push('Date of joining must be between Jan 2021 and today');
-                    isValid = false;
-                }
-
-                const workingDays = parseInt(workingDaysInput.value);
-                if (isNaN(workingDays) || workingDays < 1 || workingDays > 31) {
-                    workingDaysInput.classList.add('is-invalid');
-                    errors.push('Working days must be between 1 and 31');
-                    isValid = false;
-                }
-
-                if (!/^[a-zA-Z\s]+$/.test(bankNameInput.value)) {
-                    bankNameInput.classList.add('is-invalid');
-                    errors.push('Invalid bank name');
-                    isValid = false;
-                }
-
-                if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(panNoInput.value)) {
-                    panNoInput.classList.add('is-invalid');
-                    errors.push('Invalid PAN number');
-                    isValid = false;
-                }
-
-                if (!/^\d{10,18}$/.test(bankAccountNoInput.value)) {
-                    bankAccountNoInput.classList.add('is-invalid');
-                    errors.push('Invalid bank account number');
-                    isValid = false;
-                }
-
-                if (!/^[A-Z0-9]{12,22}$/.test(pfNoInput.value)) {
-                    pfNoInput.classList.add('is-invalid');
-                    errors.push('Invalid PF number');
-                    isValid = false;
-                }
-
-                if (!/^\d{12}$/.test(uanNoInput.value)) {
-                    uanNoInput.classList.add('is-invalid');
-                    errors.push('Invalid UAN number');
-                    isValid = false;
-                }
-
-                if (!/^[A-Z0-9]{10,17}$/.test(esicNoInput.value)) {
-                    esicNoInput.classList.add('is-invalid');
-                    errors.push('Invalid ESIC number');
-                    isValid = false;
-                }
-
-                const basicSalary = parseFloat(document.getElementById('basicSalary').value) || 0;
-                if (basicSalary <= 0) {
-                    document.getElementById('basicSalary').classList.add('is-invalid');
-                    errors.push('Basic salary must be positive');
-                    isValid = false;
-                }
-
-                const numericFields = ['hra', 'otherAllowance', 'professionalTax', 'tds', 'providentFund', 'lwp', 'otherDeduction'];
-                numericFields.forEach(id => {
-                    const value = parseFloat(document.getElementById(id).value) || 0;
-                    if (value < 0) {
-                        document.getElementById(id).classList.add('is-invalid');
-                        errors.push(`${id} must be non-negative`);
-                        isValid = false;
-                    }
-                });
-
-                return { isValid, errors };
-            }
-
-            // Form submission
-            payslipForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                if (isSubmitting) return;
-
-                errorMessage.style.display = 'none';
-                successMessage.style.display = 'none';
-
-                const { isValid, errors } = validateForm();
-                if (!isValid) {
-                    errorMessage.textContent = `Please correct: ${errors.join(', ')}`;
-                    errorMessage.style.display = 'block';
-                    return;
-                }
-
-                isSubmitting = true;
-                submitBtn.disabled = true;
-                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
-
-                const formData = {
-                    employee_id: employeeIdInput.value,
-                    employee_name: employeeNameInput.value,
-                    employee_email: employeeEmailInput.value,
-                    month_year: new Date(monthYearInput.value + '-01').toLocaleString('en-US', { month: 'long', year: 'numeric' }),
-                    designation: designationInput.value,
-                    office_location: officeLocationInput.value,
-                    employment_type: employmentTypeInput.value,
-                    date_of_joining: dateOfJoiningInput.value,
-                    working_days: parseInt(workingDaysInput.value),
-                    bank_name: bankNameInput.value,
-                    pan_no: panNoInput.value,
-                    bank_account_no: bankAccountNoInput.value,
-                    pf_no: pfNoInput.value,
-                    uan_no: uanNoInput.value,
-                    esic_no: esicNoInput.value,
-                    basic_salary: parseFloat(document.getElementById('basicSalary').value) || 0,
-                    hra: parseFloat(document.getElementById('hra').value) || 0,
-                    other_allowance: parseFloat(document.getElementById('otherAllowance').value) || 0,
-                    professional_tax: parseFloat(document.getElementById('professionalTax').value) || 0,
-                    tds: parseFloat(document.getElementById('tds').value) || 0,
-                    provident_fund: parseFloat(document.getElementById('providentFund').value) || 0,
-                    lwp: parseFloat(document.getElementById('lwp').value) || 0,
-                    other_deduction: parseFloat(document.getElementById('otherDeduction').value) || 0
-                };
-
-                try {
-                    const response = await fetch('http://54.166.206.245:3111/api/payslips', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(formData)
-                    });
-
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.error || 'Failed to submit payslip');
-                    }
-
-                    const result = await response.json();
-                    console.log('Payslip created:', result);
-
-                    successMessage.style.display = 'flex';
-                    setTimeout(() => successMessage.style.display = 'none', 3000);
-
-                    payslipForm.reset();
-                    netSalaryDisplay.textContent = '₹0.00';
-
-                    if (document.getElementById('detailsTab').classList.contains('active')) {
-                        loadPayslipHistory();
-                    }
-                } catch (err) {
-                    console.error('Submission error:', err);
-                    errorMessage.textContent = err.message;
-                    errorMessage.style.display = 'block';
-                } finally {
-                    isSubmitting = false;
-                    submitBtn.disabled = false;
-                    submitBtn.textContent = 'Generate Payslip';
-                }
-            });
-
-            async function loadPayslipHistory() {
-                try {
-                    const search = document.getElementById('searchInput').value;
-                    const month = document.getElementById('monthFilter').value;
-                    const year = document.getElementById('yearFilter').value;
-
-                    const params = new URLSearchParams();
-                    if (search) params.append('search', search);
-                    if (month) params.append('month', month);
-                    if (year) params.append('year', year);
-
-                    const url = `http://54.166.206.245:3111/api/payslips/history?${params.toString()}`;
-                    const response = await fetch(url);
-
-                    if (!response.ok) {
-                        throw new Error('Failed to fetch payslip history');
-                    }
-
-                    const payslips = await response.json();
-                    displayPayslips(payslips);
-                } catch (err) {
-                    console.error('Error:', err);
-                    errorMessage.textContent = err.message;
-                    errorMessage.style.display = 'block';
-                }
-            }
-
-            function displayPayslips(payslips) {
-                const historyBody = document.getElementById('payslipHistory');
-                const noRecords = document.getElementById('noRecords');
-
-                historyBody.innerHTML = '';
-                noRecords.style.display = payslips.length === 0 ? 'block' : 'none';
-
-                payslips.forEach(payslip => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${payslip.payslip_id}</td>
-                        <td>${payslip.employee_id}</td>
-                        <td>${payslip.employee_name}</td>
-                        <td>${payslip.designation}</td>
-                        <td>${payslip.office_location}</td>
-                        <td>${payslip.month_year}</td>
-                        <td>₹${payslip.net_salary.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                        <td><span class="badge badge-success">${payslip.status}</span></td>
-                        <td>
-                            <button class="btn btn-sm btn-primary download-btn">Download</button>
-                        </td>
-                    `;
-                    row.querySelector('.download-btn').addEventListener('click', () => downloadPayslipAsPDF(payslip));
-                    historyBody.appendChild(row);
-                });
-            }
-
-            async function downloadPayslipAsPDF(payslip) {
-                try {
-                    // Calculate totals
-                    const totalEarnings = Number(payslip.basic_salary) + Number(payslip.hra) + Number(payslip.other_allowance);
-                    const totalDeductions = Number(payslip.professional_tax) + Number(payslip.tds) + Number(payslip.provident_fund) + Number(payslip.lwp) + Number(payslip.other_deduction);
-                    const netSalary = totalEarnings - totalDeductions;
-                    const netSalaryWords = numberToWords(Math.floor(netSalary));
-                    const monthYear = payslip.month_year;
-
-                    const docContent = document.createElement('div');
-                    docContent.className = 'pdf-content';
-                    docContent.style.padding = '10mm';
-                    docContent.style.width = '210mm';
-                    docContent.style.backgroundColor = '#fff';
-                    docContent.style.boxSizing = 'border-box';
-                    docContent.innerHTML = `
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5mm;">
-                            <div>
-                                <p style="font-weight: bold; font-size: 9pt; margin: 0;">Astrolite Tech Solutions Pvt Ltd</p>
-                                <p style="font-size: 7pt; margin: 1mm 0 0;">Plot No 65, Flat No 201, 2nd Floor,</p>
-                                <p style="font-size: 7pt; margin: 0;">Siddivinayaka Nagar, Survey of India,</p>
-                                <p style="font-size: 7pt; margin: 0;">Madhapur, Hyderabad - 500081</p>
-                            </div>
- <img id="company-logo" src="${logoImg.src}" style="height: 15mm; max-width: 35mm;" alt="Company Logo">                        </div>
-                        <hr style="border: 0.2mm solid #ccc; margin: 3mm 0;">
-                        <h2 style="text-align: center; font-size: 12pt; color: #333; margin: 0;">Payslip of ${monthYear}</h2>
-                        <div style="margin: 5mm 0; font-size: 7pt;">
-                            <table style="width: 100%; border-collapse: collapse;">
-                                <tr>
-                                    <td style="width: 50%; vertical-align: top; padding-right: 5mm;">
-                                        <p><strong>Employee ID:</strong> ${payslip.employee_id}</p>
-                                        <p><strong>Name:</strong> ${payslip.employee_name}</p>
-                                        <p><strong>Email:</strong> ${payslip.employee_email}</p>
-                                        <p><strong>Designation:</strong> ${payslip.designation}</p>
-                                        <p><strong>Office:</strong> ${payslip.office_location}</p>
-                                        <p><strong>Employment:</strong> ${payslip.employment_type}</p>
-                                        <p><strong>Joining Date:</strong> ${new Date(payslip.date_of_joining).toLocaleDateString('en-IN')}</p>
-                                        <p><strong>Working Days:</strong> ${payslip.working_days}</p>
-                                    </td>
-                                    <td style="width: 50%; vertical-align: top;">
-                                        <p><strong>PID:</strong> ${payslip.payslip_id}</p>
-                                        <p><strong>Bank:</strong> ${payslip.bank_name}</p>
-                                        <p><strong>PAN:</strong> ${payslip.pan_no}</p>
-                                        <p><strong>Account No:</strong> ${payslip.bank_account_no}</p>
-                                        <p><strong>PF No:</strong> ${payslip.pf_no}</p>
-                                        <p><strong>UAN:</strong> ${payslip.uan_no}</p>
-                                        <p><strong>ESIC:</strong> ${payslip.esic_no}</p>
-                                        <p><strong>Status:</strong> ${payslip.status}</p>
-                                    </td>
-                                </tr>
-                            </table>
-                        </div>
-                        <table style="width: 100%; border-collapse: collapse; margin: 5mm 0; font-size: 7pt;">
-                            <thead>
-                                <tr>
-                                    <th style="border: 0.2mm solid #ddd; padding: 2mm; background-color: #f8f9fa; text-align: left;">Earnings</th>
-                                    <th style="border: 0.2mm solid #ddd; padding: 2mm; background-color: #f8f9fa; text-align: right;">Amount (₹)</th>
-                                    <th style="border: 0.2mm solid #ddd; padding: 2mm; background-color: #f8f9fa; text-align: left;">Deductions</th>
-                                    <th style="border: 0.2mm solid #ddd; padding: 2mm; background-color: #f8f9fa; text-align: right;">Amount (₹)</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm;">Basic Salary</td>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${Number(payslip.basic_salary).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm;">Professional Tax</td>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${Number(payslip.professional_tax).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                </tr>
-                                <tr>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm;">House Rent Allowance</td>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${Number(payslip.hra).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm;">Tax Deducted at Source</td>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${Number(payslip.tds).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                </tr>
-                                <tr>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm;">Other Allowance</td>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${Number(payslip.other_allowance).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm;">Provident Fund</td>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${Number(payslip.provident_fund).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                </tr>
-                                <tr>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm;"></td>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm;"></td>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm;">Leave Without Pay</td>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${Number(payslip.lwp).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                </tr>
-                                <tr>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm;"></td>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm;"></td>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm;">Other Deduction</td>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${Number(payslip.other_deduction).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                </tr>
-                                <tr>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm; font-weight: bold;">Total Earnings</td>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right; font-weight: bold;">${totalEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm; font-weight: bold;">Total Deductions</td>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right; font-weight: bold;">${totalDeductions.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                        <div style="background-color: #f8f9fa; padding: 3mm; border-radius: 2mm; margin-top: 3mm;">
-                            <p style="font-weight: bold; font-size: 9pt; text-align: right; margin: 0;">Net Salary: ₹${netSalary.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
-                            <p style="text-align: right; font-size: 7pt; margin: 1mm 0 0; text-transform: capitalize;">(${netSalaryWords})</p>
-                        </div>
-                        <div style="clear: both;"></div>
-                        <table style="width: 100%; border-collapse: collapse; margin: 5mm 0; font-size: 7pt;">
-                            <thead>
-                                <tr>
-                                    <th style="border: 0.2mm solid #ddd; padding: 2mm; background-color: #f8f9fa; text-align: left;">Description</th>
-                                    <th style="border: 0.2mm solid #ddd; padding: 2mm; background-color: #f8f9fa; text-align: right;">Amount (₹)</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm;">Total Earnings (a)</td>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${totalEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                </tr>
-                                <tr>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm;">Total Deductions (b)</td>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${totalDeductions.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                </tr>
-                                <tr>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm; font-weight: bold;">Net Pay (a-b)</td>
-                                    <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right; font-weight: bold;">${netSalary.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                        <div style="text-align: center; color: #333; font-size: 7pt; margin-top: 5mm;">
-                            <p style="margin: 0;">This is a auto-generated payslip.If you have doubts of the content of this payslip contact astrolite tech solution hr</p>
-                            <p style="margin: 1mm 0 0;">Astrolite Tech Solutions</p>
-                        </div>
-                        <div style="text-align: right; font-size: 6pt; color: #777; margin-top: 5mm;">
-                            <p>Generated on: ${new Date().toLocaleString('en-IN')}</p>
-                        </div>
-                    `;
-                    document.body.appendChild(docContent);
-
-                    const canvas = await html2canvas(docContent, { 
-                        scale: 2,
-                        logging: false,
-                        useCORS: true,
-                        allowTaint: true
-                    });
-                    const imgData = canvas.toDataURL('image/png');
-                    const pdf = new jsPDF('p', 'mm', 'a4');
-                    const imgWidth = 210;
-                    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-                    if (imgHeight > 297) {
-                        console.warn('Content may be too tall for A4 page. Adjust layout if truncated.');
-                    }
-
-                    pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-                    pdf.save(`Payslip_${payslip.payslip_id}_${payslip.employee_id}.pdf`);
-                    document.body.removeChild(docContent);
-                } catch (err) {
-                    console.error('PDF generation error:', err);
-                    errorMessage.textContent = 'Failed to generate PDF';
-                    errorMessage.style.display = 'block';
-                }
-            }
-
-            // Form reset
-            payslipForm.querySelector('button[type="reset"]').addEventListener('click', () => {
                 payslipForm.reset();
                 netSalaryDisplay.textContent = '₹0.00';
-                document.querySelectorAll('.form-control').forEach(input => input.classList.remove('is-invalid'));
-                errorMessage.style.display = 'none';
-                monthYearInput.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-                designationInput.value = '';
-                officeLocationInput.value = '';
-                employmentTypeInput.value = '';
-            });
 
-            // Search and filter events
-            document.getElementById('searchInput').addEventListener('input', loadPayslipHistory);
-            document.getElementById('monthFilter').addEventListener('change', loadPayslipHistory);
-            document.getElementById('yearFilter').addEventListener('change', loadPayslipHistory);
-
-            // Initial load if on details tab
-            if (document.getElementById('detailsTab').classList.contains('active')) {
-                loadPayslipHistory();
+                if (document.getElementById('detailsTab').classList.contains('active')) {
+                    loadPayslipHistory();
+                }
+            } catch (err) {
+                console.error('Submission error:', err);
+                errorMessage.textContent = `Error: ${err.message}`;
+                errorMessage.style.display = 'block';
+            } finally {
+                isSubmitting = false;
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Generate Payslip';
             }
         });
-    </script>
+
+        // Load payslip history
+        async function loadPayslipHistory() {
+            try {
+                const search = document.getElementById('searchInput').value;
+                const month = document.getElementById('monthFilter').value;
+                const year = document.getElementById('yearFilter').value;
+
+                const params = new URLSearchParams();
+                if (search) params.append('search', search);
+                if (month) params.append('month', month);
+                if (year) params.append('year', year);
+
+                const url = `http://3.88.203.125:3111/api/payslips/history?${params.toString()}`; // Updated to 3111
+                const response = await fetch(url);
+
+                const contentType = response.headers.get('Content-Type') || '';
+                const text = await response.text();
+                console.log('Raw GET response:', text);
+
+                if (!contentType.includes('application/json')) {
+                    throw new Error(`Invalid response type: ${contentType}; expected JSON`);
+                }
+
+                const payslips = JSON.parse(text);
+
+                if (!response.ok) {
+                    throw new Error(payslips.error || `HTTP error ${response.status}`);
+                }
+
+                displayPayslips(payslips);
+            } catch (err) {
+                console.error('History fetch error:', err);
+                errorMessage.textContent = `Error fetching payslips: ${err.message}`;
+                errorMessage.style.display = 'block';
+            }
+        }
+
+        // Display payslips
+        function displayPayslips(payslips) {
+            const historyBody = document.getElementById('payslipHistory');
+            const noRecords = document.getElementById('noRecords');
+            historyBody.innerHTML = '';
+            noRecords.style.display = payslips.length === 0 ? 'block' : 'none';
+
+            payslips.forEach(payslip => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${payslip.payslip_id}</td>
+                    <td>${payslip.employee_id}</td>
+                    <td>${payslip.employee_name}</td>
+                    <td>${payslip.designation}</td>
+                    <td>${payslip.office_location}</td>
+                    <td>${payslip.month_year}</td>
+                    <td>₹${payslip.net_salary.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    <td><span class="badge badge-success">${payslip.status}</span></td>
+                    <td>
+                        <button class="btn btn-sm btn-primary download-btn">Download</button>
+                    </td>
+                `;
+                row.querySelector('.download-btn').addEventListener('click', () => downloadPayslipAsPDF(payslip));
+                historyBody.appendChild(row);
+            });
+        }
+
+        // Download payslip as PDF
+        async function downloadPayslipAsPDF(payslip) {
+            try {
+                const totalEarnings = Number(payslip.basic_salary) + Number(payslip.hra) + Number(payslip.other_allowance);
+                const totalDeductions = Number(payslip.professional_tax) + Number(payslip.tds) + Number(payslip.provident_fund) + Number(payslip.lwp) + Number(payslip.other_deduction);
+                const netSalary = totalEarnings - totalDeductions;
+                const netSalaryWords = numberToWords(Math.floor(netSalary));
+                const monthYear = payslip.month_year;
+
+                const docContent = document.createElement('div');
+                docContent.className = 'pdf-content';
+                docContent.style.padding = '10mm';
+                docContent.style.width = '210mm';
+                docContent.style.backgroundColor = '#fff';
+                docContent.style.boxSizing = 'border-box';
+                docContent.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <div>
+                            <p style="font-weight: bold; font-size: 12pt; margin: 0;">Astrolite Tech Solutions Pvt Ltd</p>
+                            <p style="font-size: 7pt; margin: 1mm 0 0;">Plot No: 65, Flat No: 201, 2nd Floor,</p>
+                            <p style="font-size: 7pt; margin: 0;">Siddivinayaka Nagar, Survey of India,</p>
+                            <p style="font-size: 7pt; margin: 0;">Madhapur, Hyderabad - 500081</p>
+                        </div>
+                        <img id="company-logo" src="${logoImg.src}" style="height: 15mm; max-width: 35mm;" alt="Company Logo">
+                    </div>
+                    <hr style="border: 0.2mm solid #ccc; margin: 3mm 0;">
+                    <h2 style="text-align: center; font-size: 12pt; color: #333; margin: 0;">Payslip of ${monthYear}</h2>
+                    <div style="margin: 5mm 0; font-size: 7pt;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <tr>
+                                <td style="width: 50%; vertical-align: top; padding-right: 5mm;">
+                                    <p><strong>Employee ID:</strong> ${payslip.employee_id}</p>
+                                    <p><strong>Name:</strong> ${payslip.employee_name}</p>
+                                    <p><strong>Email:</strong> ${payslip.employee_email}</p>
+                                    <p><strong>Designation:</strong> ${payslip.designation}</p>
+                                    <p><strong>Office:</strong> ${payslip.office_location}</p>
+                                    <p><strong>Employment:</strong> ${payslip.employment_type}</p>
+                                    <p><strong>Joining Date:</strong> ${new Date(payslip.date_of_joining).toLocaleDateString('en-IN')}</p>
+                                    <p><strong>Working Days:</strong> ${payslip.working_days}</p>
+                                </td>
+                                <td style="width: 50%; vertical-align: top;">
+                                    <p><strong>PID:</strong> ${payslip.payslip_id}</p>
+                                    <p><strong>Bank:</strong> ${payslip.bank_name}</p>
+                                    <p><strong>PAN:</strong> ${payslip.pan_no}</p>
+                                    <p><strong>Account No:</strong> ${payslip.bank_account_no}</p>
+                                    <p><strong>PF No:</strong> ${payslip.pf_no}</p>
+                                    <p><strong>UAN:</strong> ${payslip.uan_no}</p>
+                                    <p><strong>ESIC:</strong> ${payslip.esic_no}</p>
+                                    <p><strong>Status:</strong> ${payslip.status}</p>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                    <table style="width: 100%; border-collapse: collapse; margin: 5mm 0; font-size: 7pt;">
+                        <thead>
+                            <tr>
+                                <th style="border: 0.2mm solid #ddd; padding: 2mm; background-color: #f8f9fa; text-align: left;">Earnings</th>
+                                <th style="border: 0.2mm solid #ddd; padding: 2mm; background-color: #f8f9fa; text-align: right;">Amount (₹)</th>
+                                <th style="border: 0.2mm solid #ddd; padding: 2mm; background-color: #f8f9fa; text-align: left;">Deductions</th>
+                                <th style="border: 0.2mm solid #ddd; padding: 2mm; background-color: #f8f9fa; text-align: right;">Amount (₹)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm;">Basic Salary</td>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${Number(payslip.basic_salary).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm;">Professional Tax</td>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${Number(payslip.professional_tax).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                            <tr>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm;">House Rent Allowance</td>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${Number(payslip.hra).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm;">Tax Deducted at Source</td>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${Number(payslip.tds).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                            <tr>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm;">Other Allowance</td>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${Number(payslip.other_allowance).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm;">Provident Fund</td>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${Number(payslip.provident_fund).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                            <tr>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm;"></td>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm;"></td>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm;">Leave Without Pay</td>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${Number(payslip.lwp).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                            <tr>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm;"></td>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm;"></td>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm;">Other Deduction</td>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${Number(payslip.other_deduction).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                            <tr>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm; font-weight: bold;">Total Earnings</td>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right; font-weight: bold;">${totalEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm; font-weight: bold;">Total Deductions</td>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right; font-weight: bold;">${totalDeductions.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div style="background-color: #f8f9fa; padding: 3mm; border-radius: 2mm; margin-top: 3mm;">
+                        <p style="font-weight: bold; font-size: 9pt; text-align: right; margin: 0;">Net Salary: ₹${netSalary.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                        <p style="text-align: right; font-size: 7pt; margin: 1mm 0 0; text-transform: capitalize;">(${netSalaryWords})</p>
+                    </div>
+                    <div style="clear: both;"></div>
+                    <table style="width: 100%; border-collapse: collapse; margin: 5mm 0; font-size: 7pt;">
+                        <thead>
+                            <tr>
+                                <th style="border: 0.2mm solid #ddd; padding: 2mm; background-color: #f8f9fa; text-align: left;">Description</th>
+                                <th style="border: 0.2mm solid #ddd; padding: 2mm; background-color: #f8f9fa; text-align: right;">Amount (₹)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm;">Total Earnings (a)</td>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${totalEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                            <tr>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm;">Total Deductions (b)</td>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${totalDeductions.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                            <tr>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm; font-weight: bold;">Net Pay (a-b)</td>
+                                <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right; font-weight: bold;">${netSalary.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div style="text-align: center; color: #333; font-size: 7pt; margin-top: 5mm;">
+                        <p style="margin: 0;">This is an auto-generated payslip. If you have doubts about the content of this payslip, contact Astrolite Tech Solutions HR</p>
+                        <p style="margin: 1mm 0 0;">Astrolite Tech Solutions</p>
+                    </div>
+                    <div style="text-align: right; font-size: 6pt; color: #777; margin-top: 5mm;">
+                        <p>Generated on: ${new Date().toLocaleString('en-IN')}</p>
+                    </div>
+                `;
+                document.body.appendChild(docContent);
+
+                const canvas = await html2canvas(docContent, { 
+                    scale: 2,
+                    logging: false,
+                    useCORS: true,
+                    allowTaint: true
+                });
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const imgWidth = 210;
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+                if (imgHeight > 297) {
+                    console.warn('Content may be too tall for A4 page. Adjust layout if truncated.');
+                }
+
+                pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+                pdf.save(`Payslip_${payslip.payslip_id}_${payslip.employee_id}.pdf`);
+                document.body.removeChild(docContent);
+            } catch (err) {
+                console.error('PDF generation error:', err);
+                errorMessage.textContent = 'Failed to generate PDF: ' + err.message;
+                errorMessage.style.display = 'block';
+            }
+        }
+
+        // Form reset
+        payslipForm.querySelector('button[type="reset"]').addEventListener('click', () => {
+            payslipForm.reset();
+            netSalaryDisplay.textContent = '₹0.00';
+            document.querySelectorAll('.form-control').forEach(input => input.classList.remove('is-invalid'));
+            errorMessage.style.display = 'none';
+            monthYearInput.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+            designationInput.value = '';
+            officeLocationInput.value = '';
+            employmentTypeInput.value = '';
+        });
+
+        // Search and filter events
+        document.getElementById('searchInput').addEventListener('input', loadPayslipHistory);
+        document.getElementById('monthFilter').addEventListener('change', loadPayslipHistory);
+        document.getElementById('yearFilter').addEventListener('change', loadPayslipHistory);
+
+        // Initial load if on details tab
+        if (document.getElementById('detailsTab').classList.contains('active')) {
+            loadPayslipHistory();
+        }
+    });
+</script>
 </body>
 </html>

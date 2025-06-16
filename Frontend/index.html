@@ -363,9 +363,13 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const { jsPDF } = window.jspdf;
-           const logoImg = new Image();
-                logoImg.crossOrigin = 'Anonymous'; 
-                logoImg.src = './logo.png';
+            const logoImg = new Image();
+            logoImg.crossOrigin = 'Anonymous';
+            logoImg.src = 'http://3.88.203.125:3111/upload/logo.png';
+            logoImg.onerror = () => {
+                console.warn(`[${new Date().toISOString()}] Logo failed to load, using placeholder`);
+                logoImg.src = 'https://via.placeholder.com/100x40?text=Logo';
+            };
 
             let isSubmitting = false;
 
@@ -530,40 +534,46 @@
                 }
 
                 try {
-                    const params = new URLSearchParams({
-                        search: employeeIdInput.value
-                    });
+                    const params = new URLSearchParams();
+                    params.append('search', employeeIdInput.value);
 
                     if (startMonthInput.value) {
                         const startDate = new Date(startMonthInput.value + '-01');
-                        const month = startDate.getMonth() + 1;
-                        const year = startDate.getFullYear();
-                        params.append('month', month);
-                        params.append('year', year);
+                        params.append('month', startDate.getMonth() + 1);
+                        params.append('year', startDate.getFullYear());
                     }
 
-                    console.log(`[${new Date().toISOString()}] Fetching payslips: http://54.166.206.245:3111/api/payslips/history?${params.toString()}`);
-                    const response = await fetch(`http://54.166.206.245:3111/api/payslips/history?${params.toString()}`);
+                    const url = `http://3.88.203.125:3111/api/payslips/history?${params.toString()}`;
+                    console.log(`[${new Date().toISOString()}] Fetching payslips: ${url}`);
+
+                    const response = await fetch(url);
+                    const contentType = response.headers.get('Content-Type') || '';
+                    const text = await response.text();
+                    console.log(`[${new Date().toISOString()}] Raw GET response:`, text);
+
+                    if (!contentType.includes('application/json')) {
+                        throw new Error(`Invalid response type: ${contentType}; expected JSON`);
+                    }
+
+                    const payslips = JSON.parse(text);
+
                     if (!response.ok) {
-                        const errorData = await response.json().catch(() => ({}));
-                        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+                        throw new Error(payslips.error || `HTTP ${response.status}: ${response.statusText}`);
                     }
-
-                    let payslips = await response.json();
 
                     // Client-side filtering for email and endMonth
-                    payslips = payslips.filter(payslip => payslip.employee_email === employeeEmailInput.value);
+                    let filteredPayslips = payslips.filter(payslip => payslip.employee_email.toLowerCase() === employeeEmailInput.value.toLowerCase());
 
                     if (endMonthInput.value) {
                         const endDate = new Date(endMonthInput.value + '-01');
-                        payslips = payslips.filter(payslip => {
-                            const payslipDate = new Date(payslip.month_year);
-                            return payslipDate <= endDate;
+                        filteredPayslips = filteredPayslips.filter(payslip => {
+                            const payslipDate = new Date(`${payslip.month_year}-01`);
+                            return payslipDate <= endDate && payslipDate >= new Date(startMonthInput.value + '-01');
                         });
                     }
 
-                    console.log(`[${new Date().toISOString()}] Fetched ${payslips.length} payslips after filtering`);
-                    displayPayslips(payslips);
+                    console.log(`[${new Date().toISOString()}] Fetched ${filteredPayslips.length} payslips after filtering`);
+                    displayPayslips(filteredPayslips);
                 } catch (err) {
                     logError('Failed to fetch payslips', err);
                 } finally {
@@ -631,7 +641,8 @@
                             <p style="font-size: 7pt; margin: 0;">Siddivinayaka Nagar, Survey of India,</p>
                             <p style="font-size: 7pt; margin: 0;">Madhapur, Hyderabad - 500081</p>
                         </div>
-                        <img id="company-logo" src="${logoImg.src}" style="height: 15mm; max-width: 35mm;" alt="Company Logo">                    </div>
+                        <img id="company-logo" src="${logoImg.src}" style="height: 15mm; max-width: 35mm;" alt="Company Logo">
+                    </div>
                     <hr style="border: 0.2mm solid #ccc; margin: 3mm 0;">
                     <h2 style="text-align: center; font-size: 12pt; color: #333; margin: 0;">Payslip of ${monthYear}</h2>
                     <div style="margin: 5mm 0; font-size: 7pt;">
@@ -747,7 +758,7 @@
                     });
                     const imgData = canvas.toDataURL('image/png');
                     const pdf = new jsPDF('p', 'mm', 'a4');
-                    const imgWidth = 210; // A4 width in mm
+                    const imgWidth = 210;
                     const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
                     if (imgHeight > 297) {

@@ -2,20 +2,91 @@ const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs'); // Add fs for file system operations
 
 const app = express();
-const port = 3111;
+const PORT = 3111;
+
+// Absolute path to the upload directory (replace with your actual path)
+const UPLOAD_DIR = '../upload';
+
+
+if (!fs.existsSync(UPLOAD_DIR)) {
+    console.error(`[${new Date().toISOString()}] Upload directory does not exist: ${UPLOAD_DIR}`);
+    process.exit(1); // Exit if the directory is not found
+}
+
+// CORS configuration
+const allowedOrigins = [
+    'http://3.88.203.125:8048',
+    'http://3.88.203.125:8049',
+    'http://3.88.203.125:5500',
+    'http://localhost:3000',
+    'http://localhost:5500',
+    'http://localhost:5501',
+    'http://127.0.0.1:8048',
+    'http://127.0.0.1:8049',
+    'http://127.0.0.1:5500',
+    'http://127.0.0.1:5501',
+    'http://127.0.0.1:5502'
+];
+
+app.use(cors({
+    origin: (origin, callback) => {
+        console.log(`[${new Date().toISOString()}] Request Origin: ${origin}`);
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            const error = new Error(`Origin ${origin} not allowed by CORS`);
+            callback(error);
+        }
+    },
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type'],
+}));
+
+// Request logging middleware
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    next();
+});
 
 // Middleware
-app.use(cors());
 app.use(express.json());
-app.use('/static', express.static(path.join(__dirname, 'public')));
 
+// Serve static files from the 'upload' directory using absolute path
+app.use('/upload', express.static(UPLOAD_DIR, {
+    dotfiles: 'ignore',
+    index: false,
+    redirect: false,
+    setHeaders: (res, filePath) => {
+        console.log(`[${new Date().toISOString()}] Serving file: ${filePath}`);
+    }
+}));
+console.log(`[${new Date().toISOString()}] Serving static files from: ${UPLOAD_DIR}`);
+
+// Add a specific route to test logo access
+app.get('/upload/logo.png', (req, res) => {
+    const logoPath = path.join(UPLOAD_DIR, 'logo.png');
+    if (fs.existsSync(logoPath)) {
+        res.sendFile(logoPath, err => {
+            if (err) {
+                console.error(`[${new Date().toISOString()}] Error serving logo.png:`, err.message);
+                res.status(500).json({ error: 'Error serving logo' });
+            }
+        });
+    } else {
+        console.error(`[${new Date().toISOString()}] logo.png not found at: ${logoPath}`);
+        res.status(404).json({ error: 'Logo file not found' });
+    }
+});
+
+// PostgreSQL connection
 const pool = new Pool({
     user: 'postgres',
-    host: 'postgres',
+    host: 'localhost',
     database: 'new_employee_db',
-    password: 'admin123',
+    password: 'Password@12345',
     port: 5432
 });
 
@@ -27,7 +98,7 @@ const logError = (message, error) => {
 // Initialize database
 async function initializeDatabase() {
     const createTableQuery = `
-    drop table if exists payslips;
+        DROP TABLE IF EXISTS payslips;
         CREATE TABLE IF NOT EXISTS payslips (
             payslip_id VARCHAR(20) PRIMARY KEY,
             employee_id TEXT NOT NULL,
@@ -52,7 +123,7 @@ async function initializeDatabase() {
             tds DECIMAL(10,2) NOT NULL,
             provident_fund DECIMAL(10,2) NOT NULL,
             lwp DECIMAL(10,2) NOT NULL,
-            other_deduction DECIMAL(10,2) NOT NULL,
+            other_deduction DECIMAL(10,2),
             net_salary DECIMAL(10,2) NOT NULL,
             status TEXT NOT NULL,
             CONSTRAINT unique_employee_month_year UNIQUE (employee_id, month_year)
@@ -116,25 +187,36 @@ const validatePayslipData = (req, res, next) => {
         return res.status(400).json({ error: 'Month/Year must be in "Month YYYY" format' });
     }
 
-    if (!['Software Engineer', 'Senior Software Engineer', 'Project Manager', 'HR Manager'].includes(req.body.designation)) {
+    const validDesignations = [
+        'Trainee Software Engineer', 'Junior Software Engineer', 'Software Engineer',
+        'Senior Software Engineer', 'Associate Technical Lead', 'Technical Lead',
+        'Project Manager', 'Trainee Test Engineer', 'Junior Test Engineer',
+        'Test Engineer', 'Senior Test Engineer', 'Test Lead', 'Data Analyst',
+        'Senior Data Analyst', 'Power BI Developer', 'Data Scientist',
+        'DevOps Engineer', 'Senior DevOps Engineer', 'DevOps Architect',
+        'HR Executive', 'HR Manager', 'Admin Executive', 'Admin Manager',
+        'Finance Executive', 'Senior Finance Executive', 'Finance Manager'
+    ];
+    if (!validDesignations.includes(req.body.designation)) {
         logError('Validation error', new Error('Invalid designation'));
         return res.status(400).json({ error: 'Invalid designation' });
     }
 
-    if (!['Hyderabad', 'Bangalore', 'Pune'].includes(req.body.office_location)) {
+    if (!['Hyderabad', 'Bangalore', 'Pune', 'Chennai', 'Delhi'].includes(req.body.office_location)) {
         logError('Validation error', new Error('Invalid office_location'));
-        return res.status(400).json({ error: 'Office location must be Hyderabad, Bangalore, or Pune' });
+        return res.status(400).json({ error: 'Office location must be Hyderabad, Bangalore, Pune, Chennai, or Delhi' });
     }
 
-    if (!['Permanent', 'Contract', 'Temporary'].includes(req.body.employment_type)) {
+    if (!['Permanent', 'Contract', 'Temporary', 'Intern'].includes(req.body.employment_type)) {
         logError('Validation error', new Error('Invalid employment_type'));
-        return res.status(400).json({ error: 'Employment type must be Permanent, Contract, or Temporary' });
+        return res.status(400).json({ error: 'Employment type must be Permanent, Contract, Temporary, or Intern' });
     }
 
     const doj = new Date(req.body.date_of_joining);
-    if (isNaN(doj.getTime()) || doj > new Date()) {
+    const minDate = new Date('2021-01-01');
+    if (isNaN(doj.getTime()) || doj > new Date() || doj < minDate) {
         logError('Validation error', new Error('Invalid date_of_joining'));
-        return res.status(400).json({ error: 'Invalid date of joining' });
+        return res.status(400).json({ error: 'Date of joining must be between Jan 2021 and today' });
     }
 
     if (!Number.isInteger(req.body.working_days) || req.body.working_days < 1 || req.body.working_days > 31) {
@@ -205,7 +287,6 @@ app.post('/api/payslips', validatePayslipData, async (req, res) => {
     const payslip_id = `PSL-${yearMonth}-${Math.floor(100 + Math.random() * 900)}`;
 
     try {
-        // Check for duplicate
         const checkResult = await pool.query(
             'SELECT 1 FROM payslips WHERE employee_id = $1 AND month_year = $2',
             [employee_id, month_year]
@@ -216,9 +297,8 @@ app.post('/api/payslips', validatePayslipData, async (req, res) => {
             return res.status(400).json({ error: 'Payslip already exists for this employee and month/year' });
         }
 
-        // Insert new payslip
         const insertResult = await pool.query(
-                        `INSERT INTO payslips (
+            `INSERT INTO payslips (
                 payslip_id, employee_id, employee_name, employee_email, month_year,
                 designation, office_location, employment_type, date_of_joining,
                 working_days, bank_name, pan_no, bank_account_no, pf_no,
@@ -310,9 +390,16 @@ app.get('/api/payslips/:id', async (req, res) => {
     }
 });
 
+// Catch invalid routes
+app.use((req, res) => {
+    logError('Invalid route accessed', new Error(`Route not found: ${req.originalUrl}`));
+    res.status(404).json({ error: 'Route not found' });
+});
+
 // Start server
-app.listen(port, '0.0.0.0', () => {
-    console.log(`[${new Date().toISOString()}] Server running on http://54.166.206.245:${port}`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`[${new Date().toISOString()}] Server running on http://3.88.203.125:${PORT}`);
+    console.log(`Also accessible at http://localhost:${PORT}`);
 });
 
 // Error handling for uncaught exceptions

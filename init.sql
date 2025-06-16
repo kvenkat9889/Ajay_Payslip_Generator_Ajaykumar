@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS payslips (
+        CREATE TABLE IF NOT EXISTS payslips (
             payslip_id VARCHAR(20) PRIMARY KEY,
             employee_id TEXT NOT NULL,
             employee_name TEXT NOT NULL,
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS payslips (
             tds DECIMAL(10,2) NOT NULL,
             provident_fund DECIMAL(10,2) NOT NULL,
             lwp DECIMAL(10,2) NOT NULL,
-            other_deduction DECIMAL(10,2) NOT NULL,
+            other_deduction DECIMAL(10,2),
             net_salary DECIMAL(10,2) NOT NULL,
             status TEXT NOT NULL,
             CONSTRAINT unique_employee_month_year UNIQUE (employee_id, month_year)
