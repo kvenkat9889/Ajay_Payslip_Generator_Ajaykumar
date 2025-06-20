@@ -367,7 +367,7 @@
     // Initialize logo image
     const logoImg = new Image();
     logoImg.crossOrigin = 'Anonymous';
-    logoImg.src = './logo.png';
+    logoImg.src = 'logo.png';
     logoImg.onerror = () => {
         console.warn(`[${new Date().toISOString()}] Logo failed to load from ./logo.png`);
     };
