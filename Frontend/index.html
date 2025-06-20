@@ -363,78 +363,23 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const { jsPDF } = window.jspdf;
+            
+            // Dynamic API configuration
+            const API_BASE_URL = window.location.hostname === '44.223.23.145' 
+                ? 'http://44.223.23.145:3401' 
+                : 'http://localhost:3401';
+            
+            console.log(`API Base URL: ${API_BASE_URL}`);
+
+            // Load company logo
             const logoImg = new Image();
-            logoImg.crossOrigin = 'Anonymous';
-            logoImg.src = 'http://3.88.203.125:3111/upload/logo.png';
+            logoImg.src = `${API_BASE_URL}/upload/logo.png`;
             logoImg.onerror = () => {
-                console.warn(`[${new Date().toISOString()}] Logo failed to load, using placeholder`);
+                console.log('Using placeholder logo');
                 logoImg.src = 'https://via.placeholder.com/100x40?text=Logo';
             };
 
-            let isSubmitting = false;
-
-            // Set default start month
-            const today = new Date();
-            document.getElementById('startMonth').value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-
-            // Error logging
-            const logError = (message, error) => {
-                console.error(`[${new Date().toISOString()}] ${message}:`, error.message || error, error.stack || '');
-                const errorMessage = document.getElementById('errorMessage');
-                errorMessage.textContent = error.message || message;
-                errorMessage.style.display = 'block';
-            };
-
-            // Number to words conversion
-            function numberToWords(num) {
-                if (num === 0) return 'Zero Only';
-                if (num > 9999999) return 'Amount too large';
-
-                const ones = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
-                const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
-                const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-
-                function convertHundreds(n) {
-                    let str = '';
-                    if (n > 99) {
-                        str += ones[Math.floor(n / 100)] + ' Hundred';
-                        n %= 100;
-                        if (n > 0) str += ' and ';
-                    }
-                    if (n > 19) {
-                        str += tens[Math.floor(n / 10)];
-                        n %= 10;
-                        if (n > 0) str += ' ' + ones[n];
-                    } else if (n > 9) {
-                        str += teens[n - 10];
-                    } else if (n > 0) {
-                        str += ones[n];
-                    }
-                    return str;
-                }
-
-                let str = '';
-                let lakh = Math.floor(num / 100000);
-                num %= 100000;
-                let thousand = Math.floor(num / 1000);
-                num %= 1000;
-
-                if (lakh > 0) {
-                    str += convertHundreds(lakh) + ' Lakh';
-                    if (thousand > 0 || num > 0) str += ' ';
-                }
-                if (thousand > 0) {
-                    str += convertHundreds(thousand) + ' Thousand';
-                    if (num > 0) str += ' ';
-                }
-                if (num > 0) {
-                    str += convertHundreds(num);
-                }
-
-                return str.trim() + ' Only';
-            }
-
-            // Form elements
+            // DOM elements
             const payslipForm = document.getElementById('payslipForm');
             const employeeIdInput = document.getElementById('employeeId');
             const employeeEmailInput = document.getElementById('employeeEmail');
@@ -445,9 +390,23 @@
             const noRecords = document.getElementById('noRecords');
             const submitBtn = document.getElementById('submitBtn');
 
+            // Set default month to current month
+            const today = new Date();
+            startMonthInput.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+
+            // Error handling
+            const showError = (message) => {
+                errorMessage.textContent = message;
+                errorMessage.style.display = 'block';
+                setTimeout(() => {
+                    errorMessage.style.display = 'none';
+                }, 5000);
+            };
+
             // Validations
             employeeIdInput.addEventListener('input', () => {
-                const isValid = /^ATS0[0-9]{3}$/.test(employeeIdInput.value) && employeeIdInput.value !== 'ATS0000';
+                const isValid = /^ATS0[0-9]{3}$/.test(employeeIdInput.value) && 
+                               employeeIdInput.value !== 'ATS0000';
                 employeeIdInput.classList.toggle('is-invalid', !isValid);
             });
 
@@ -456,86 +415,39 @@
                 employeeEmailInput.classList.toggle('is-invalid', !isValid);
             });
 
-            startMonthInput.addEventListener('input', validateMonths);
-            endMonthInput.addEventListener('input', validateMonths);
-
-            function validateMonths() {
-                let isValid = true;
-
-                if (!startMonthInput.value) {
-                    startMonthInput.classList.add('is-invalid');
-                    isValid = false;
-                } else {
-                    const startDate = new Date(startMonthInput.value + '-01');
-                    if (startDate < new Date('2021-01-01') || startDate > new Date('2025-05-01')) {
-                        startMonthInput.classList.add('is-invalid');
-                        isValid = false;
-                    } else {
-                        startMonthInput.classList.remove('is-invalid');
-                    }
-                }
-
-                if (endMonthInput.value) {
+            function validateDateRange() {
+                if (startMonthInput.value && endMonthInput.value) {
                     const startDate = new Date(startMonthInput.value + '-01');
                     const endDate = new Date(endMonthInput.value + '-01');
-                    if (endDate < startDate || endDate > new Date('2025-05-01')) {
-                        endMonthInput.classList.add('is-invalid');
-                        isValid = false;
-                    } else {
-                        endMonthInput.classList.remove('is-invalid');
-                    }
-                } else {
-                    endMonthInput.classList.remove('is-invalid');
+                    return endDate >= startDate;
                 }
-
-                return isValid;
-            }
-
-            function validateForm() {
-                let isValid = true;
-
-                if (!/^ATS0[0-9]{3}$/.test(employeeIdInput.value) || employeeIdInput.value === 'ATS0000') {
-                    employeeIdInput.classList.add('is-invalid');
-                    isValid = false;
-                } else {
-                    employeeIdInput.classList.remove('is-invalid');
-                }
-
-                if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.(com|in|org|co\.in)$/i.test(employeeEmailInput.value)) {
-                    employeeEmailInput.classList.add('is-invalid');
-                    isValid = false;
-                } else {
-                    employeeEmailInput.classList.remove('is-invalid');
-                }
-
-                if (!validateMonths()) {
-                    isValid = false;
-                }
-
-                return isValid;
+                return true;
             }
 
             // Form submission
             payslipForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                if (isSubmitting) return;
-
-                errorMessage.style.display = 'none';
-                isSubmitting = true;
+                
+                if (submitBtn.disabled) return;
+                
                 submitBtn.disabled = true;
                 submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
-
-                if (!validateForm()) {
-                    logError('Form validation failed', new Error('Invalid form data'));
-                    isSubmitting = false;
-                    submitBtn.disabled = false;
-                    submitBtn.textContent = 'View Payslips';
-                    return;
-                }
+                errorMessage.style.display = 'none';
 
                 try {
-                    const params = new URLSearchParams();
-                    params.append('search', employeeIdInput.value);
+                    // Validate inputs
+                    if (!/^ATS0[0-9]{3}$/.test(employeeIdInput.value)) {
+                        throw new Error('Invalid Employee ID format');
+                    }
+
+                    if (!validateDateRange()) {
+                        throw new Error('End date must be after start date');
+                    }
+
+                    // Build API URL
+                    const params = new URLSearchParams({
+                        search: employeeIdInput.value
+                    });
 
                     if (startMonthInput.value) {
                         const startDate = new Date(startMonthInput.value + '-01');
@@ -543,49 +455,51 @@
                         params.append('year', startDate.getFullYear());
                     }
 
-                    const url = `http://3.88.203.125:3111/api/payslips/history?${params.toString()}`;
-                    console.log(`[${new Date().toISOString()}] Fetching payslips: ${url}`);
+                    const url = `${API_BASE_URL}/api/payslips/history?${params.toString()}`;
+                    console.log('Fetching:', url);
 
-                    const response = await fetch(url);
-                    const contentType = response.headers.get('Content-Type') || '';
-                    const text = await response.text();
-                    console.log(`[${new Date().toISOString()}] Raw GET response:`, text);
-
-                    if (!contentType.includes('application/json')) {
-                        throw new Error(`Invalid response type: ${contentType}; expected JSON`);
-                    }
-
-                    const payslips = JSON.parse(text);
+                    // Make API request
+                    const response = await fetch(url, {
+                        headers: {
+                            'Accept': 'application/json'
+                        }
+                    });
 
                     if (!response.ok) {
-                        throw new Error(payslips.error || `HTTP ${response.status}: ${response.statusText}`);
+                        const error = await response.json().catch(() => ({}));
+                        throw new Error(error.message || 'Failed to fetch payslips');
                     }
 
-                    // Client-side filtering for email and endMonth
-                    let filteredPayslips = payslips.filter(payslip => payslip.employee_email.toLowerCase() === employeeEmailInput.value.toLowerCase());
-
-                    if (endMonthInput.value) {
+                    const payslips = await response.json();
+                    
+                    // Filter results
+                    const filteredPayslips = payslips.filter(payslip => {
+                        // Filter by email
+                        const emailMatch = payslip.employee_email.toLowerCase() === 
+                                         employeeEmailInput.value.toLowerCase();
+                        
+                        // Filter by date range if end month is specified
+                        if (!endMonthInput.value) return emailMatch;
+                        
+                        const payslipDate = new Date(`${payslip.month_year} 01`);
+                        const startDate = new Date(startMonthInput.value + '-01');
                         const endDate = new Date(endMonthInput.value + '-01');
-                        filteredPayslips = filteredPayslips.filter(payslip => {
-                            const payslipDate = new Date(`${payslip.month_year}-01`);
-                            return payslipDate <= endDate && payslipDate >= new Date(startMonthInput.value + '-01');
-                        });
-                    }
+                        
+                        return emailMatch && payslipDate >= startDate && payslipDate <= endDate;
+                    });
 
-                    console.log(`[${new Date().toISOString()}] Fetched ${filteredPayslips.length} payslips after filtering`);
                     displayPayslips(filteredPayslips);
                 } catch (err) {
-                    logError('Failed to fetch payslips', err);
+                    console.error('Error:', err);
+                    showError(err.message || 'An error occurred');
                 } finally {
-                    isSubmitting = false;
                     submitBtn.disabled = false;
                     submitBtn.textContent = 'View Payslips';
                 }
             });
 
-            // Display payslips
+            // Display payslips in table
             function displayPayslips(payslips) {
-                console.log(`[${new Date().toISOString()}] Rendering ${payslips.length} payslips`);
                 payslipHistory.innerHTML = '';
                 noRecords.style.display = payslips.length === 0 ? 'block' : 'none';
 
@@ -602,184 +516,127 @@
                             <button class="btn btn-sm btn-primary download-btn">Download</button>
                         </td>
                     `;
-                    row.querySelector('.download-btn').addEventListener('click', async () => {
-                        console.log(`[${new Date().toISOString()}] Downloading payslip: ${payslip.payslip_id}`);
-                        try {
-                            await downloadPayslipAsPDF(payslip);
-                        } catch (err) {
-                            logError('Failed to download PDF', err);
-                        }
+                    
+                    // Add download button handler
+                    row.querySelector('.download-btn').addEventListener('click', () => {
+                        downloadPayslipAsPDF(payslip);
                     });
+                    
                     payslipHistory.appendChild(row);
                 });
             }
 
             // Download payslip as PDF
             async function downloadPayslipAsPDF(payslip) {
-                console.log(`[${new Date().toISOString()}] Generating PDF for ${payslip.payslip_id}`);
-                if (!jsPDF || !window.html2canvas) {
-                    throw new Error('Required libraries (jsPDF or html2canvas) not loaded');
-                }
-
-                const totalEarnings = Number(payslip.basic_salary) + Number(payslip.hra) + Number(payslip.other_allowance);
-                const totalDeductions = Number(payslip.professional_tax) + Number(payslip.tds) + Number(payslip.provident_fund) + Number(payslip.lwp) + Number(payslip.other_deduction);
-                const netSalary = totalEarnings - totalDeductions;
-                const netSalaryWords = numberToWords(Math.floor(netSalary));
-                const monthYear = payslip.month_year;
-
-                const docContent = document.createElement('div');
-                docContent.className = 'pdf-content';
-                docContent.style.padding = '10mm';
-                docContent.style.width = '210mm';
-                docContent.style.backgroundColor = '#fff';
-                docContent.style.boxSizing = 'border-box';
-                docContent.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5mm;">
-                        <div>
-                            <p style="font-weight: bold; font-size: 9pt; margin: 0;">Astrolite Tech Solutions Pvt Ltd</p>
-                            <p style="font-size: 7pt; margin: 1mm 0 0;">Plot No 65, Flat No 201, 2nd Floor,</p>
-                            <p style="font-size: 7pt; margin: 0;">Siddivinayaka Nagar, Survey of India,</p>
-                            <p style="font-size: 7pt; margin: 0;">Madhapur, Hyderabad - 500081</p>
-                        </div>
-                        <img id="company-logo" src="${logoImg.src}" style="height: 15mm; max-width: 35mm;" alt="Company Logo">
-                    </div>
-                    <hr style="border: 0.2mm solid #ccc; margin: 3mm 0;">
-                    <h2 style="text-align: center; font-size: 12pt; color: #333; margin: 0;">Payslip of ${monthYear}</h2>
-                    <div style="margin: 5mm 0; font-size: 7pt;">
-                        <table style="width: 100%; border-collapse: collapse;">
-                            <tr>
-                                <td style="width: 50%; vertical-align: top; padding-right: 5mm;">
-                                    <p><strong>Employee ID:</strong> ${payslip.employee_id}</p>
-                                    <p><strong>Name:</strong> ${payslip.employee_name}</p>
-                                    <p><strong>Email:</strong> ${payslip.employee_email}</p>
-                                    <p><strong>Designation:</strong> ${payslip.designation}</p>
-                                    <p><strong>Office:</strong> ${payslip.office_location}</p>
-                                </td>
-                                <td style="width: 50%; vertical-align: top;">
-                                    <p><strong>PID:</strong> ${payslip.payslip_id}</p>
-                                    <p><strong>Bank:</strong> ${payslip.bank_name}</p>
-                                    <p><strong>PAN:</strong> ${payslip.pan_no}</p>
-                                    <p><strong>Account No:</strong> ${payslip.bank_account_no}</p>
-                                    <p><strong>Status:</strong> ${payslip.status}</p>
-                                </td>
-                            </tr>
-                        </table>
-                    </div>
-                    <table style="width: 100%; border-collapse: collapse; margin: 5mm 0; font-size: 7pt;">
-                        <thead>
-                            <tr>
-                                <th style="border: 0.2mm solid #ddd; padding: 2mm; background-color: #f8f9fa; text-align: left;">Earnings</th>
-                                <th style="border: 0.2mm solid #ddd; padding: 2mm; background-color: #f8f9fa; text-align: right;">Amount (₹)</th>
-                                <th style="border: 0.2mm solid #ddd; padding: 2mm; background-color: #f8f9fa; text-align: left;">Deductions</th>
-                                <th style="border: 0.2mm solid #ddd; padding: 2mm; background-color: #f8f9fa; text-align: right;">Amount (₹)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm;">Basic Salary</td>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${Number(payslip.basic_salary).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm;">Professional Tax</td>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${Number(payslip.professional_tax).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            </tr>
-                            <tr>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm;">House Rent Allowance</td>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${Number(payslip.hra).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm;">Tax Deducted at Source</td>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${Number(payslip.tds).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            </tr>
-                            <tr>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm;">Other Allowance</td>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${Number(payslip.other_allowance).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm;">Provident Fund</td>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${Number(payslip.provident_fund).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            </tr>
-                            <tr>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm;"></td>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm;"></td>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm;">Leave Without Pay</td>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${Number(payslip.lwp).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            </tr>
-                            <tr>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm;"></td>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm;"></td>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm;">Other Deduction</td>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${Number(payslip.other_deduction).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            </tr>
-                            <tr>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm; font-weight: bold;">Total Earnings</td>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right; font-weight: bold;">${totalEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm; font-weight: bold;">Total Deductions</td>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right; font-weight: bold;">${totalDeductions.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    <div style="background-color: #f8f9fa; padding: 3mm; border-radius: 2mm; margin-top: 3mm;">
-                        <p style="font-weight: bold; font-size: 9pt; text-align: right; margin: 0;">Net Salary: ₹${netSalary.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
-                        <p style="text-align: right; font-size: 7pt; margin: 1mm 0 0; text-transform: capitalize;">(${netSalaryWords})</p>
-                    </div>
-                    <table style="width: 100%; border-collapse: collapse; margin: 5mm 0; font-size: 7pt;">
-                        <thead>
-                            <tr>
-                                <th style="border: 0.2mm solid #ddd; padding: 2mm; background-color: #f8f9fa; text-align: left;">Description</th>
-                                <th style="border: 0.2mm solid #ddd; padding: 2mm; background-color: #f8f9fa; text-align: right;">Amount (₹)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm;">Total Earnings (a)</td>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${totalEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            </tr>
-                            <tr>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm;">Total Deductions (b)</td>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right;">${totalDeductions.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            </tr>
-                            <tr>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm; font-weight: bold;">Net Pay (a-b)</td>
-                                <td style="border: 0.2mm solid #ddd; padding: 2mm; text-align: right; font-weight: bold;">${netSalary.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    <div style="text-align: center; color: #333; font-size: 7pt; margin-top: 5mm;">
-                        <p style="margin: 0;">This is an auto-generated payslip. If you have doubts about the content of this payslip, contact Astrolite Tech Solutions HR.</p>
-                        <p style="margin: 1mm 0 0;">Astrolite Tech Solutions Pvt Ltd</p>
-                    </div>
-                    <div style="text-align: right; font-size: 6pt; color: #777; margin-top: 5mm;">
-                        <p>Generated on: ${new Date().toLocaleString('en-IN')}</p>
-                    </div>
-                `;
-                document.body.appendChild(docContent);
-
                 try {
-                    const canvas = await html2canvas(docContent, {
-                        scale: 2,
-                        logging: true,
-                        useCORS: true,
-                        allowTaint: true
-                    });
-                    const imgData = canvas.toDataURL('image/png');
-                    const pdf = new jsPDF('p', 'mm', 'a4');
-                    const imgWidth = 210;
-                    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-                    if (imgHeight > 297) {
-                        console.warn(`[${new Date().toISOString()}] Content height (${imgHeight}mm) exceeds A4 page (297mm). Content may be truncated.`);
+                    const doc = new jsPDF();
+                    
+                    // Add company header
+                    doc.setFontSize(16);
+                    doc.setTextColor(40);
+                    doc.text('Astrolite Tech Solutions Pvt Ltd', 105, 15, { align: 'center' });
+                    
+                    // Add logo if available
+                    try {
+                        const logoData = await loadImage(logoImg.src);
+                        doc.addImage(logoData, 'PNG', 160, 5, 40, 15);
+                    } catch (err) {
+                        console.log('Could not add logo:', err);
                     }
-
-                    pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-                    pdf.save(`Payslip_${payslip.payslip_id}.pdf`);
-                    console.log(`[${new Date().toISOString()}] PDF downloaded: Payslip_${payslip.payslip_id}.pdf`);
+                    
+                    // Add payslip title
+                    doc.setFontSize(14);
+                    doc.text(`Payslip for ${payslip.month_year}`, 105, 30, { align: 'center' });
+                    
+                    // Add employee information
+                    doc.setFontSize(10);
+                    doc.text(`Employee ID: ${payslip.employee_id}`, 20, 45);
+                    doc.text(`Name: ${payslip.employee_name}`, 20, 55);
+                    doc.text(`Designation: ${payslip.designation}`, 20, 65);
+                    
+                    doc.text(`Bank: ${payslip.bank_name}`, 110, 45);
+                    doc.text(`Account No: ${payslip.bank_account_no}`, 110, 55);
+                    doc.text(`PAN: ${payslip.pan_no}`, 110, 65);
+                    
+                    // Add salary breakdown
+                    doc.setFontSize(12);
+                    doc.text('Earnings', 20, 85);
+                    doc.text('Amount (₹)', 60, 85);
+                    doc.text('Deductions', 110, 85);
+                    doc.text('Amount (₹)', 150, 85);
+                    
+                    doc.setFontSize(10);
+                    doc.text('Basic Salary', 20, 95);
+                    doc.text(payslip.basic_salary.toLocaleString('en-IN'), 60, 95, { align: 'right' });
+                    
+                    doc.text('HRA', 20, 105);
+                    doc.text(payslip.hra.toLocaleString('en-IN'), 60, 105, { align: 'right' });
+                    
+                    doc.text('Other Allowance', 20, 115);
+                    doc.text(payslip.other_allowance.toLocaleString('en-IN'), 60, 115, { align: 'right' });
+                    
+                    doc.text('Professional Tax', 110, 95);
+                    doc.text(payslip.professional_tax.toLocaleString('en-IN'), 150, 95, { align: 'right' });
+                    
+                    doc.text('TDS', 110, 105);
+                    doc.text(payslip.tds.toLocaleString('en-IN'), 150, 105, { align: 'right' });
+                    
+                    doc.text('Provident Fund', 110, 115);
+                    doc.text(payslip.provident_fund.toLocaleString('en-IN'), 150, 115, { align: 'right' });
+                    
+                    // Add totals
+                    doc.setFontSize(12);
+                    doc.text('Total Earnings', 20, 130);
+                    const totalEarnings = Number(payslip.basic_salary) + Number(payslip.hra) + Number(payslip.other_allowance);
+                    doc.text(totalEarnings.toLocaleString('en-IN'), 60, 130, { align: 'right' });
+                    
+                    doc.text('Total Deductions', 110, 130);
+                    const totalDeductions = Number(payslip.professional_tax) + Number(payslip.tds) + Number(payslip.provident_fund);
+                    doc.text(totalDeductions.toLocaleString('en-IN'), 150, 130, { align: 'right' });
+                    
+                    // Add net salary
+                    doc.setFontSize(14);
+                    doc.text('Net Salary:', 20, 150);
+                    doc.text(`₹${payslip.net_salary.toLocaleString('en-IN')}`, 60, 150, { align: 'right' });
+                    
+                    // Add footer
+                    doc.setFontSize(8);
+                    doc.setTextColor(100);
+                    doc.text('Generated on: ' + new Date().toLocaleString(), 20, 280);
+                    doc.text('Astrolite Tech Solutions Pvt Ltd', 105, 280, { align: 'center' });
+                    
+                    // Save PDF
+                    doc.save(`Payslip_${payslip.payslip_id}.pdf`);
                 } catch (err) {
-                    throw new Error(`PDF generation failed: ${err.message}`);
-                } finally {
-                    document.body.removeChild(docContent);
+                    console.error('PDF generation failed:', err);
+                    showError('Failed to generate PDF');
                 }
             }
 
-            // Initial library check
-            console.log(`[${new Date().toISOString()}] Libraries loaded:`, {
-                html2canvas: !!window.html2canvas,
-                jsPDF: !!jsPDF
-            });
+            // Helper function to load image with CORS
+            function loadImage(url) {
+                return new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.crossOrigin = 'Anonymous';
+                    img.onload = () => resolve(img);
+                    img.onerror = reject;
+                    img.src = url;
+                });
+            }
+
+            // Initial health check
+            async function checkServerHealth() {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/api/health`);
+                    if (!response.ok) throw new Error('Server not healthy');
+                    console.log('Server connection OK');
+                } catch (err) {
+                    console.error('Server health check failed:', err);
+                    showError('Warning: Could not connect to server');
+                }
+            }
+
+            checkServerHealth();
         });
     </script>
 </body>

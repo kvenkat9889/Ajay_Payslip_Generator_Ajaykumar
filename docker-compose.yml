@@ -5,7 +5,7 @@ services:
     container_name: payslip_backend1
     build: ./Backend
     ports:
-      - "3111:3111"
+      - "3401:3401"
     depends_on:
       - postgres
     environment:
@@ -19,19 +19,19 @@ services:
     container_name: payslip_frontend1
     build: ./Frontend
     ports:
-      - "8047:80"
+      - "8008:80"
 
   hr_page:
     container_name: payslip_hr_page1
     build: ./HR_Page
     ports:
-      - "8048:80"
+      - "8009:80"
 
   postgres:
     container_name: payslip_postgres1
     image: postgres:13
     ports:
-      - "5459:5432"
+      - "5401:5432"
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: admin123

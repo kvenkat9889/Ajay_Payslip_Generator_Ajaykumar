@@ -1,412 +1,415 @@
+require('dotenv').config();
 const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
 const path = require('path');
-const fs = require('fs'); // Add fs for file system operations
+const fs = require('fs');
+const morgan = require('morgan');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
-const PORT = 3111;
+const PORT = process.env.PORT || 3401;
 
-// Absolute path to the upload directory (replace with your actual path)
-const UPLOAD_DIR = '../upload';
-
+const UPLOAD_DIR = path.join(__dirname, process.env.UPLOAD_DIR || '../upload');
+const MAX_FILE_SIZE = process.env.MAX_FILE_SIZE || '10mb';
+const DB_CONFIG = {
+  user: process.env.DB_USER || 'postgres',
+  host: process.env.DB_HOST || 'postgres',
+  database: process.env.DB_NAME || 'new_employee_db',
+  password: process.env.DB_PASSWORD || 'admin123',
+  port: process.env.DB_PORT || 5432,
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false
+};
 
 if (!fs.existsSync(UPLOAD_DIR)) {
-    console.error(`[${new Date().toISOString()}] Upload directory does not exist: ${UPLOAD_DIR}`);
-    process.exit(1); // Exit if the directory is not found
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+  console.log(`Created upload directory: ${UPLOAD_DIR}`);
 }
 
-// CORS configuration
-const allowedOrigins = [
-    'http://3.88.203.125:8048',
-    'http://3.88.203.125:8049',
-    'http://3.88.203.125:5500',
-    'http://3.88.203.125:3000',
-    'http://3.88.203.125:5500',
-    'http://3.88.203.125:5501',
-    'http://127.0.0.1:8048',
-    'http://127.0.0.1:8049',
-    'http://127.0.0.1:5500',
-    'http://127.0.0.1:5501',
-    'http://127.0.0.1:5502'
-];
-
+app.use(helmet());
 app.use(cors({
-    origin: (origin, callback) => {
-        console.log(`[${new Date().toISOString()}] Request Origin: ${origin}`);
-        if (!origin || allowedOrigins.includes(origin)) {
-            callback(null, true);
-        } else {
-            const error = new Error(`Origin ${origin} not allowed by CORS`);
-            callback(error);
-        }
-    },
-    methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type'],
+  origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : [
+    'http://44.223.23.145:3401',
+    'http://127.0.0.1:5500',
+    'http://44.223.23.145:5500',
+    'http://127.0.0.1:5503',
+    'null'
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
 }));
 
-// Request logging middleware
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: 'Too many requests from this IP, please try again later'
+});
+app.use(limiter);
+
+app.use(morgan('combined'));
 app.use((req, res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-    next();
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
 });
 
-// Middleware
-app.use(express.json());
+app.use(express.json({ limit: MAX_FILE_SIZE }));
+app.use(express.urlencoded({ extended: true, limit: MAX_FILE_SIZE }));
 
-// Serve static files from the 'upload' directory using absolute path
-app.use('/upload', express.static(UPLOAD_DIR, {
-    dotfiles: 'ignore',
-    index: false,
-    redirect: false,
-    setHeaders: (res, filePath) => {
-        console.log(`[${new Date().toISOString()}] Serving file: ${filePath}`);
-    }
-}));
-console.log(`[${new Date().toISOString()}] Serving static files from: ${UPLOAD_DIR}`);
-
-// Add a specific route to test logo access
-app.get('/upload/logo.png', (req, res) => {
-    const logoPath = path.join(UPLOAD_DIR, 'logo.png');
-    if (fs.existsSync(logoPath)) {
-        res.sendFile(logoPath, err => {
-            if (err) {
-                console.error(`[${new Date().toISOString()}] Error serving logo.png:`, err.message);
-                res.status(500).json({ error: 'Error serving logo' });
-            }
-        });
-    } else {
-        console.error(`[${new Date().toISOString()}] logo.png not found at: ${logoPath}`);
-        res.status(404).json({ error: 'Logo file not found' });
-    }
+const pool = new Pool(DB_CONFIG);
+pool.on('error', (err) => {
+  console.error('Unexpected database error:', err);
+  process.exit(-1);
 });
 
-// PostgreSQL connection
-const pool = new Pool({
-    user: 'postgres',
-    host: 'postgres',
-    database: 'new_employee_db',
-    password: 'admin123',
-    port: 5432
-});
-
-// Error logging
-const logError = (message, error) => {
-    console.error(`[${new Date().toISOString()}] ${message}:`, error.message || error);
-};
-
-// Initialize database
 async function initializeDatabase() {
-    const createTableQuery = `
-        DROP TABLE IF EXISTS payslips;
-        CREATE TABLE IF NOT EXISTS payslips (
-            payslip_id VARCHAR(20) PRIMARY KEY,
-            employee_id TEXT NOT NULL,
-            employee_name TEXT NOT NULL,
-            employee_email TEXT NOT NULL,
-            month_year TEXT NOT NULL,
-            designation TEXT NOT NULL,
-            office_location TEXT NOT NULL,
-            employment_type TEXT NOT NULL,
-            date_of_joining DATE NOT NULL,
-            working_days INTEGER NOT NULL,
-            bank_name TEXT NOT NULL,
-            pan_no TEXT NOT NULL,
-            bank_account_no TEXT NOT NULL,
-            pf_no TEXT NOT NULL,
-            uan_no TEXT NOT NULL,
-            esic_no TEXT NOT NULL,
-            basic_salary DECIMAL(10,2) NOT NULL,
-            hra DECIMAL(10,2) NOT NULL,
-            other_allowance DECIMAL(10,2) NOT NULL,
-            professional_tax DECIMAL(10,2) NOT NULL,
-            tds DECIMAL(10,2) NOT NULL,
-            provident_fund DECIMAL(10,2) NOT NULL,
-            lwp DECIMAL(10,2) NOT NULL,
-            other_deduction DECIMAL(10,2),
-            net_salary DECIMAL(10,2) NOT NULL,
-            status TEXT NOT NULL,
-            CONSTRAINT unique_employee_month_year UNIQUE (employee_id, month_year)
-        );
-    `;
+  const client = await pool.connect();
+  try {
+    await client.query(`
+      drop table if exists payslips;
+      CREATE TABLE IF NOT EXISTS payslips (
+        payslip_id VARCHAR(20) PRIMARY KEY,
+        employee_id TEXT NOT NULL,
+        employee_name TEXT NOT NULL,
+        employee_email TEXT NOT NULL,
+        month_year TEXT NOT NULL,
+        designation TEXT NOT NULL,
+        office_location TEXT NOT NULL,
+        employment_type TEXT NOT NULL,
+        date_of_joining DATE NOT NULL,
+        working_days INTEGER NOT NULL,
+        bank_name TEXT NOT NULL,
+        pan_no TEXT NOT NULL,
+        bank_account_no TEXT NOT NULL,
+        pf_no TEXT NOT NULL,
+        uan_no TEXT NOT NULL,
+        esic_no TEXT NOT NULL,
+        basic_salary DECIMAL(10,2) NOT NULL,
+        hra DECIMAL(10,2) NOT NULL,
+        other_allowance DECIMAL(10,2) NOT NULL,
+        professional_tax DECIMAL(10,2) NOT NULL,
+        tds DECIMAL(10,2) NOT NULL,
+        provident_fund DECIMAL(10,2) NOT NULL,
+        lwp DECIMAL(10,2) NOT NULL,
+        other_deduction DECIMAL(10,2),
+        net_salary DECIMAL(10,2) NOT NULL,
+        status TEXT NOT NULL DEFAULT 'Generated',
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        CONSTRAINT unique_employee_month_year UNIQUE (employee_id, month_year)
+      );
 
-    try {
-        await pool.query(createTableQuery);
-        console.log(`[${new Date().toISOString()}] Database initialized successfully`);
-    } catch (err) {
-        logError('Error initializing database', err);
-        throw err;
-    }
+      CREATE OR REPLACE FUNCTION update_timestamp()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        NEW.updated_at = NOW();
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS update_payslips_timestamp ON payslips;
+      CREATE TRIGGER update_payslips_timestamp
+      BEFORE UPDATE ON payslips
+      FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+    `);
+    console.log('Database initialized successfully');
+  } catch (err) {
+    console.error('Database initialization failed:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
-// Connect to database
-pool.connect()
-    .then(() => {
-        console.log(`[${new Date().toISOString()}] Connected to PostgreSQL`);
-        return initializeDatabase();
-    })
-    .catch(err => {
-        logError('Database connection error', err);
-        process.exit(1);
-    });
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    database: pool.totalCount > 0 ? 'connected' : 'disconnected'
+  });
+});
 
-// Validation middleware for payslip creation
-const validatePayslipData = (req, res, next) => {
-    const requiredFields = [
-        'employee_id', 'employee_name', 'employee_email', 'month_year',
-        'designation', 'office_location', 'employment_type', 'date_of_joining',
-        'working_days', 'bank_name', 'pan_no', 'bank_account_no', 'pf_no',
-        'uan_no', 'esic_no', 'basic_salary', 'hra', 'other_allowance',
-        'professional_tax', 'tds', 'provident_fund', 'lwp', 'other_deduction'
-    ];
+app.get('/api-docs', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Payslip API Documentation</title>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 20px; }
+        h1 { color: #333; }
+        .endpoint { background: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+        .method { font-weight: bold; color: #fff; background: #333; padding: 3px 8px; border-radius: 3px; display: inline-block; }
+        .path { font-family: monospace; margin-left: 10px; }
+        .get { background: #61affe; }
+        .post { background: #49cc90; }
+        .put { background: #fca130; }
+        .delete { background: #f93e3e; }
+      </style>
+    </head>
+    <body>
+      <h1>Payslip API Documentation</h1>
+      
+      <div class="endpoint">
+        <div><span class="method get">GET</span><span class="path">/health</span></div>
+        <p>Server health check endpoint</p>
+      </div>
+      
+      <div class="endpoint">
+        <div><span class="method post">POST</span><span class="path">/api/payslips</span></div>
+        <p>Create a new payslip</p>
+        <pre>Request body: {
+  employee_id: string,
+  employee_name: string,
+  employee_email: string,
+  month_year: string,
+  designation: string,
+  office_location: string,
+  employment_type: string,
+  date_of_joining: string (YYYY-MM-DD),
+  working_days: number,
+  bank_name: string,
+  pan_no: string,
+  bank_account_no: string,
+  pf_no: string,
+  uan_no: string,
+  esic_no: string,
+  basic_salary: number,
+  hra: number,
+  other_allowance: number,
+  professional_tax: number,
+  tds: number,
+  provident_fund: number,
+  lwp: number,
+  other_deduction: number
+}</pre>
+      </div>
+      
+      <div class="endpoint">
+        <div><span class="method get">GET</span><span class="path">/api/payslips/history</span></div>
+        <p>Get payslip history with pagination</p>
+        <p>Query parameters: search, month, year, page, limit</p>
+      </div>
+      
+      <div class="endpoint">
+        <div><span class="method get">GET</span><span class="path">/api/payslips/:id</span></div>
+        <p>Get a specific payslip by ID</p>
+      </div>
+    </body>
+    </html>
+  `);
+});
 
-    for (const field of requiredFields) {
-        if (req.body[field] === undefined || req.body[field] === null) {
-            logError('Validation error', new Error(`${field} is required`));
-            return res.status(400).json({ error: `${field} is required` });
-        }
+const router = express.Router();
+
+router.post('/payslips', validatePayslip, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { body } = req;
+    const netSalary = calculateNetSalary(body);
+    const payslipId = generatePayslipId(body.month_year);
+
+    await client.query('BEGIN');
+    
+    const exists = await client.query(
+      'SELECT 1 FROM payslips WHERE employee_id = $1 AND month_year = $2',
+      [body.employee_id, body.month_year]
+    );
+
+    if (exists.rowCount > 0) {
+      return res.status(409).json({ error: 'Payslip already exists' });
     }
 
-    if (!/^ATS0[0-9]{3}$/.test(req.body.employee_id) || req.body.employee_id === 'ATS0000') {
-        logError('Validation error', new Error('Invalid employee_id'));
-        return res.status(400).json({ error: 'Employee ID must be ATS0 followed by 3 digits (not 000)' });
-    }
-
-    if (!/^[a-zA-Z]+(?:\s[a-zA-Z]+)*$/.test(req.body.employee_name)) {
-        logError('Validation error', new Error('Invalid employee_name'));
-        return res.status(400).json({ error: 'Name must contain letters and single spaces' });
-    }
-
-    if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.(com|in|org|co\.in)$/i.test(req.body.employee_email)) {
-        logError('Validation error', new Error('Invalid employee_email'));
-        return res.status(400).json({ error: 'Invalid email format' });
-    }
-
-    if (!/^[A-Za-z]+\s[0-9]{4}$/.test(req.body.month_year)) {
-        logError('Validation error', new Error('Invalid month_year'));
-        return res.status(400).json({ error: 'Month/Year must be in "Month YYYY" format' });
-    }
-
-    const validDesignations = [
-        'Trainee Software Engineer', 'Junior Software Engineer', 'Software Engineer',
-        'Senior Software Engineer', 'Associate Technical Lead', 'Technical Lead',
-        'Project Manager', 'Trainee Test Engineer', 'Junior Test Engineer',
-        'Test Engineer', 'Senior Test Engineer', 'Test Lead', 'Data Analyst',
-        'Senior Data Analyst', 'Power BI Developer', 'Data Scientist',
-        'DevOps Engineer', 'Senior DevOps Engineer', 'DevOps Architect',
-        'HR Executive', 'HR Manager', 'Admin Executive', 'Admin Manager',
-        'Finance Executive', 'Senior Finance Executive', 'Finance Manager'
-    ];
-    if (!validDesignations.includes(req.body.designation)) {
-        logError('Validation error', new Error('Invalid designation'));
-        return res.status(400).json({ error: 'Invalid designation' });
-    }
-
-    if (!['Hyderabad', 'Bangalore', 'Pune', 'Chennai', 'Delhi'].includes(req.body.office_location)) {
-        logError('Validation error', new Error('Invalid office_location'));
-        return res.status(400).json({ error: 'Office location must be Hyderabad, Bangalore, Pune, Chennai, or Delhi' });
-    }
-
-    if (!['Permanent', 'Contract', 'Temporary', 'Intern'].includes(req.body.employment_type)) {
-        logError('Validation error', new Error('Invalid employment_type'));
-        return res.status(400).json({ error: 'Employment type must be Permanent, Contract, Temporary, or Intern' });
-    }
-
-    const doj = new Date(req.body.date_of_joining);
-    const minDate = new Date('2021-01-01');
-    if (isNaN(doj.getTime()) || doj > new Date() || doj < minDate) {
-        logError('Validation error', new Error('Invalid date_of_joining'));
-        return res.status(400).json({ error: 'Date of joining must be between Jan 2021 and today' });
-    }
-
-    if (!Number.isInteger(req.body.working_days) || req.body.working_days < 1 || req.body.working_days > 31) {
-        logError('Validation error', new Error('Invalid working_days'));
-        return res.status(400).json({ error: 'Working days must be between 1 and 31' });
-    }
-
-    if (!/^[a-zA-Z\s]+$/.test(req.body.bank_name)) {
-        logError('Validation error', new Error('Invalid bank_name'));
-        return res.status(400).json({ error: 'Invalid bank name' });
-    }
-
-    if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(req.body.pan_no)) {
-        logError('Validation error', new Error('Invalid pan_no'));
-        return res.status(400).json({ error: 'PAN must be 5 letters, 4 digits, 1 letter' });
-    }
-
-    if (!/^\d{10,18}$/.test(req.body.bank_account_no)) {
-        logError('Validation error', new Error('Invalid bank_account_no'));
-        return res.status(400).json({ error: 'Bank account number must be 10-18 digits' });
-    }
-
-    if (!/^[A-Z0-9]{12,22}$/.test(req.body.pf_no)) {
-        logError('Validation error', new Error('Invalid pf_no'));
-        return res.status(400).json({ error: 'PF number must be 12-22 alphanumeric characters' });
-    }
-
-    if (!/^\d{12}$/.test(req.body.uan_no)) {
-        logError('Validation error', new Error('Invalid uan_no'));
-        return res.status(400).json({ error: 'UAN must be exactly 12 digits' });
-    }
-
-    if (!/^[A-Z0-9]{10,17}$/.test(req.body.esic_no)) {
-        logError('Validation error', new Error('Invalid esic_no'));
-        return res.status(400).json({ error: 'ESIC number must be 10-17 alphanumeric characters' });
-    }
-
-    if (typeof req.body.basic_salary !== 'number' || req.body.basic_salary <= 0) {
-        logError('Validation error', new Error('Invalid basic_salary'));
-        return res.status(400).json({ error: 'Basic salary must be a positive number' });
-    }
-
-    const numericFields = ['hra', 'other_allowance', 'professional_tax', 'tds', 'provident_fund', 'lwp', 'other_deduction'];
-    for (const field of numericFields) {
-        if (typeof req.body[field] !== 'number' || req.body[field] < 0) {
-            logError('Validation error', new Error(`Invalid ${field}`));
-            return res.status(400).json({ error: `${field} must be a non-negative number` });
-        }
-    }
-
-    next();
-};
-
-// Generate payslip
-app.post('/api/payslips', validatePayslipData, async (req, res) => {
-    const {
-        employee_id, employee_name, employee_email, month_year,
+    const result = await client.query(
+      `INSERT INTO payslips (
+        payslip_id, employee_id, employee_name, employee_email, month_year,
         designation, office_location, employment_type, date_of_joining,
         working_days, bank_name, pan_no, bank_account_no, pf_no,
         uan_no, esic_no, basic_salary, hra, other_allowance,
-        professional_tax, tds, provident_fund, lwp, other_deduction
-    } = req.body;
+        professional_tax, tds, provident_fund, lwp, other_deduction,
+        net_salary
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+      RETURNING *`,
+      [
+        payslipId, body.employee_id, body.employee_name, body.employee_email, body.month_year,
+        body.designation, body.office_location, body.employment_type, body.date_of_joining,
+        body.working_days, body.bank_name, body.pan_no, body.bank_account_no, body.pf_no,
+        body.uan_no, body.esic_no, body.basic_salary, body.hra, body.other_allowance,
+        body.professional_tax, body.tds, body.provident_fund, body.lwp, body.other_deduction || 0,
+        netSalary
+      ]
+    );
 
-    const net_salary = (basic_salary + hra + other_allowance) -
-        (professional_tax + tds + provident_fund + lwp + other_deduction);
-
-    const yearMonth = month_year.replace(' ', '').toUpperCase();
-    const payslip_id = `PSL-${yearMonth}-${Math.floor(100 + Math.random() * 900)}`;
-
-    try {
-        const checkResult = await pool.query(
-            'SELECT 1 FROM payslips WHERE employee_id = $1 AND month_year = $2',
-            [employee_id, month_year]
-        );
-
-        if (checkResult.rowCount > 0) {
-            logError('Payslip creation error', new Error('Duplicate payslip'));
-            return res.status(400).json({ error: 'Payslip already exists for this employee and month/year' });
-        }
-
-        const insertResult = await pool.query(
-            `INSERT INTO payslips (
-                payslip_id, employee_id, employee_name, employee_email, month_year,
-                designation, office_location, employment_type, date_of_joining,
-                working_days, bank_name, pan_no, bank_account_no, pf_no,
-                uan_no, esic_no, basic_salary, hra, other_allowance,
-                professional_tax, tds, provident_fund, lwp, other_deduction,
-                net_salary, status
-            ) VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-                $11, $12, $13, $14, $15, $16, $17, $18, $19,
-                $20, $21, $22, $23, $24, $25, $26
-            ) RETURNING *`,
-            [
-                payslip_id, employee_id, employee_name, employee_email, month_year,
-                designation, office_location, employment_type, date_of_joining,
-                working_days, bank_name, pan_no, bank_account_no, pf_no,
-                uan_no, esic_no, basic_salary, hra, other_allowance,
-                professional_tax, tds, provident_fund, lwp, other_deduction,
-                net_salary, 'Generated'
-            ]
-        );
-
-        const newPayslip = insertResult.rows[0];
-        console.log(`[${new Date().toISOString()}] Payslip created: ${payslip_id}`);
-        res.status(201).json({
-            message: 'Payslip generated successfully',
-            payslip: newPayslip
-        });
-    } catch (err) {
-        logError('Payslip creation error', err);
-        if (err.code === '23505') {
-            res.status(400).json({ error: 'Payslip already exists for this employee and month/year' });
-        } else {
-            res.status(500).json({ error: 'Internal server error' });
-        }
-    }
+    await client.query('COMMIT');
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Payslip creation failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    client.release();
+  }
 });
 
-// Get payslip history
-app.get('/api/payslips/history', async (req, res) => {
-    const { search, month, year } = req.query;
+router.get('/payslips/history', async (req, res) => {
+  const { search, month, year, page = 1, limit = 10 } = req.query;
+  const offset = (page - 1) * limit;
 
-    let query = 'SELECT * FROM payslips WHERE 1=1';
-    const params = [];
+  try {
+    const [data, count] = await Promise.all([
+      getPayslips(search, month, year, limit, offset),
+      getPayslipCount(search, month, year)
+    ]);
 
-    if (search) {
-        query += ' AND (employee_id ILIKE $1 OR employee_name ILIKE $1)';
-        params.push(`%${search}%`);
-    }
-
-    if (month) {
-        query += ` AND EXTRACT(MONTH FROM TO_DATE(month_year, 'Month YYYY')) = $${params.length + 1}`;
-        params.push(parseInt(month));
-    }
-
-    if (year) {
-        query += ` AND EXTRACT(YEAR FROM TO_DATE(month_year, 'Month YYYY')) = $${params.length + 1}`;
-        params.push(parseInt(year));
-    }
-
-    query += ' ORDER BY TO_DATE(month_year, \'Month YYYY\') DESC, employee_id';
-
-    try {
-        const result = await pool.query(query, params);
-        console.log(`[${new Date().toISOString()}] Fetched ${result.rowCount} payslips`);
-        res.json(result.rows);
-    } catch (err) {
-        logError('Payslip history fetch error', err);
-        res.status(500).json({ error: 'Internal server error' });
-    }
+    res.json({
+      data,
+      pagination: {
+        total: parseInt(count),
+        totalPages: Math.ceil(count / limit),
+        currentPage: parseInt(page),
+        limit: parseInt(limit)
+      }
+    });
+  } catch (err) {
+    console.error('History fetch failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
-// Get single payslip by ID
-app.get('/api/payslips/:id', async (req, res) => {
-    const { id } = req.params;
-
-    try {
-        const result = await pool.query('SELECT * FROM payslips WHERE payslip_id = $1', [id]);
-
-        if (result.rowCount === 0) {
-            logError('Payslip fetch error', new Error(`Payslip not found: ${id}`));
-            return res.status(404).json({ error: 'Payslip not found' });
-        }
-
-        console.log(`[${new Date().toISOString()}] Fetched payslip: ${id}`);
-        res.json(result.rows[0]);
-    } catch (err) {
-        logError('Payslip fetch error', err);
-        res.status(500).json({ error: 'Internal server error' });
-    }
+router.get('/payslips/:id', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM payslips WHERE payslip_id = $1', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Payslip not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Payslip fetch failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
-// Catch invalid routes
+function validatePayslip(req, res, next) {
+  const { body } = req;
+  const errors = [];
+
+  if (!body.employee_id || !/^ATS0\d{3}$/.test(body.employee_id)) {
+    errors.push('Invalid employee ID format (ATS0XXX)');
+  }
+  if (!body.employee_name || body.employee_name.length < 3) {
+    errors.push('Employee name must be at least 3 characters');
+  }
+  if (!body.employee_email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.employee_email)) {
+    errors.push('Invalid email format');
+  }
+  if (!body.month_year || !/^[A-Za-z]+\s\d{4}$/.test(body.month_year)) {
+    errors.push('Month year must be in format "Month YYYY"');
+  }
+  if (!body.basic_salary || isNaN(body.basic_salary) || body.basic_salary <= 0) {
+    errors.push('Basic salary must be a positive number');
+  }
+
+  if (errors.length > 0) {
+    return res.status(400).json({ errors });
+  }
+
+  next();
+}
+
+function calculateNetSalary(data) {
+  return (data.basic_salary + data.hra + data.other_allowance) -
+    (data.professional_tax + data.tds + data.provident_fund + data.lwp + (data.other_deduction || 0));
+}
+
+function generatePayslipId(monthYear) {
+  const yearMonth = monthYear.replace(' ', '').toUpperCase();
+  return `PSL-${yearMonth}-${Math.floor(100 + Math.random() * 900)}`;
+}
+
+async function getPayslips(search, month, year, limit, offset) {
+  let query = 'SELECT * FROM payslips WHERE 1=1';
+  const params = [];
+
+  if (search) {
+    query += ' AND (employee_id ILIKE $1 OR employee_name ILIKE $1)';
+    params.push(`%${search}%`);
+  }
+
+  if (month) {
+    query += ` AND EXTRACT(MONTH FROM TO_DATE(month_year, 'Month YYYY')) = $${params.length + 1}`;
+    params.push(parseInt(month));
+  }
+
+  if (year) {
+    query += ` AND EXTRACT(YEAR FROM TO_DATE(month_year, 'Month YYYY')) = $${params.length + 1}`;
+    params.push(parseInt(year));
+  }
+
+  query += ` ORDER BY TO_DATE(month_year, 'Month YYYY') DESC, employee_id LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+  params.push(parseInt(limit), parseInt(offset));
+
+  const result = await pool.query(query, params);
+  return result.rows;
+}
+
+async function getPayslipCount(search, month, year) {
+  let query = 'SELECT COUNT(*) FROM payslips WHERE 1=1';
+  const params = [];
+
+  if (search) {
+    query += ' AND (employee_id ILIKE $1 OR employee_name ILIKE $1)';
+    params.push(`%${search}%`);
+  }
+
+  if (month) {
+    query += ` AND EXTRACT(MONTH FROM TO_DATE(month_year, 'Month YYYY')) = $${params.length + 1}`;
+    params.push(parseInt(month));
+  }
+
+  if (year) {
+    query += ` AND EXTRACT(YEAR FROM TO_DATE(month_year, 'Month YYYY')) = $${params.length + 1}`;
+    params.push(parseInt(year));
+  }
+
+  const result = await pool.query(query, params);
+  return result.rows[0].count;
+}
+
+app.use('/api', router);
+
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
 app.use((req, res) => {
-    logError('Invalid route accessed', new Error(`Route not found: ${req.originalUrl}`));
-    res.status(404).json({ error: 'Route not found' });
+  res.status(404).json({ error: 'Route not found' });
 });
 
-// Start server
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[${new Date().toISOString()}] Server running on http://3.88.203.125:${PORT}`);
-    console.log(`Also accessible at http://3.88.203.125:${PORT}`);
-});
+async function startServer() {
+  try {
+    await initializeDatabase();
+    const server = app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+      console.log(`API Documentation: http://44.223.23.145:${PORT}/api-docs`);
+    });
 
-// Error handling for uncaught exceptions
-process.on('uncaughtException', (err) => {
-    logError('Uncaught Exception', err);
-});
+    process.on('SIGTERM', () => shutdown(server));
+    process.on('SIGINT', () => shutdown(server));
+  } catch (err) {
+    console.error('Server startup failed:', err);
+    process.exit(1);
+  }
+}
 
-process.on('unhandledRejection', (err) => {
-    logError('Unhandled Rejection', err);
-});
+function shutdown(server) {
+  console.log('Shutting down gracefully...');
+  server.close(() => {
+    pool.end().then(() => {
+      console.log('Server and database pool closed');
+      process.exit(0);
+    });
+  });
+}
+
+startServer();
