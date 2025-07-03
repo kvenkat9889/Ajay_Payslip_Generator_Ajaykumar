@@ -11,7 +11,8 @@ const rateLimit = require('express-rate-limit');
 const app = express();
 const PORT = process.env.PORT || 3401;
 
-const UPLOAD_DIR = path.join(__dirname, process.env.UPLOAD_DIR || '../upload');
+// Configuration
+const UPLOAD_DIR = path.join(__dirname, process.env.UPLOAD_DIR || './upload');
 const MAX_FILE_SIZE = process.env.MAX_FILE_SIZE || '10mb';
 const DB_CONFIG = {
   user: process.env.DB_USER || 'postgres',
@@ -22,25 +23,46 @@ const DB_CONFIG = {
   ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false
 };
 
-// Create upload directory if it doesn't exist
+// Ensure upload directory exists
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
   console.log(`Created upload directory: ${UPLOAD_DIR}`);
 }
 
-// Security middleware
+// Security Middleware
 app.use(helmet());
+
+// Enable CORS
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : [
+      'http://44.223.23.145:8008',
+      'http://44.223.23.145:8009',
+      'http://44.223.23.145:3401',
+      'http://localhost:8008',
+      'http://localhost:8009'
+    ];
+
 app.use(cors({
-  origin: ['http://44.223.23.145:3401', 'http://localhost:8008', 'http://44.223.23.145:8009', 'http://localhost:8009'], // explicit allowed origins
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
 
-// Rate limiting
+// Handle preflight
+app.options('*', cors());
+
+// Rate Limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   message: 'Too many requests from this IP, please try again later'
 });
 app.use(limiter);
@@ -52,18 +74,25 @@ app.use((req, res, next) => {
   next();
 });
 
-// Body parsing
+// Body Parsing
 app.use(express.json({ limit: MAX_FILE_SIZE }));
 app.use(express.urlencoded({ extended: true, limit: MAX_FILE_SIZE }));
 
-// Database connection
+// Database Connection
 const pool = new Pool(DB_CONFIG);
 pool.on('error', (err) => {
   console.error('Unexpected database error:', err);
   process.exit(-1);
 });
 
-// Database initialization
+pool.query('SELECT NOW()')
+  .then(() => console.log('Database connected successfully'))
+  .catch(err => {
+    console.error('Database connection failed:', err);
+    process.exit(1);
+  });
+
+// Database Initialization
 async function initializeDatabase() {
   const client = await pool.connect();
   try {
@@ -123,7 +152,7 @@ async function initializeDatabase() {
   }
 }
 
-// Health check endpoint
+// Health Check Endpoints
 app.get('/health', (req, res) => {
   res.json({
     status: 'OK',
@@ -133,52 +162,18 @@ app.get('/health', (req, res) => {
   });
 });
 
-// API documentation
-app.get('/api-docs', (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Payslip API Documentation</title>
-      <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 20px; }
-        h1 { color: #333; }
-        .endpoint { background: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
-        .method { font-weight: bold; color: #fff; background: #333; padding: 3px 8px; border-radius: 3px; display: inline-block; }
-        .path { font-family: monospace; margin-left: 10px; }
-        .get { background: #61affe; }
-        .post { background: #49cc90; }
-        .put { background: #fca130; }
-        .delete { background: #f93e3e; }
-      </style>
-    </head>
-    <body>
-      <h1>Payslip API Documentation</h1>
-      <div class="endpoint">
-        <div><span class="method get">GET</span><span class="path">/health</span></div>
-        <p>Server health check endpoint</p>
-      </div>
-      <div class="endpoint">
-        <div><span class="method post">POST</span><span class="path">/api/payslips</span></div>
-        <p>Create a new payslip</p>
-      </div>
-      <div class="endpoint">
-        <div><span class="method get">GET</span><span class="path">/api/payslips/history</span></div>
-        <p>Get payslip history with pagination</p>
-      </div>
-      <div class="endpoint">
-        <div><span class="method get">GET</span><span class="path">/api/payslips/:id</span></div>
-        <p>Get a specific payslip by ID</p>
-      </div>
-    </body>
-    </html>
-  `);
+app.get('/db-health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({ database: 'healthy' });
+  } catch (err) {
+    res.status(500).json({ database: 'unhealthy', error: err.message });
+  }
 });
 
-// Router setup
+// API Routes
 const router = express.Router();
 
-// Middleware to validate payslip data
 function validatePayslip(req, res, next) {
   const { body } = req;
   const errors = [];
@@ -202,23 +197,19 @@ function validatePayslip(req, res, next) {
   if (errors.length > 0) {
     return res.status(400).json({ errors });
   }
-
   next();
 }
 
-// Calculate net salary
 function calculateNetSalary(data) {
   return (data.basic_salary + data.hra + data.other_allowance) -
     (data.professional_tax + data.tds + data.provident_fund + data.lwp + (data.other_deduction || 0));
 }
 
-// Generate payslip ID
 function generatePayslipId(monthYear) {
   const yearMonth = monthYear.replace(' ', '').toUpperCase();
   return `PSL-${yearMonth}-${Math.floor(100 + Math.random() * 900)}`;
 }
 
-// Create payslip
 router.post('/payslips', validatePayslip, async (req, res) => {
   const client = await pool.connect();
   try {
@@ -268,7 +259,6 @@ router.post('/payslips', validatePayslip, async (req, res) => {
   }
 });
 
-// Get payslip history
 router.get('/payslips/history', async (req, res) => {
   const { search, month, year, page = 1, limit = 10 } = req.query;
   const offset = (page - 1) * limit;
@@ -294,7 +284,17 @@ router.get('/payslips/history', async (req, res) => {
   }
 });
 
-// Helper function to get payslips
+router.get('/payslips/:id', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM payslips WHERE payslip_id = $1', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Payslip not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Payslip fetch failed:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 async function getPayslips(search, month, year, limit, offset) {
   let query = 'SELECT * FROM payslips WHERE 1=1';
   const params = [];
@@ -321,7 +321,6 @@ async function getPayslips(search, month, year, limit, offset) {
   return result.rows;
 }
 
-// Helper function to get payslip count
 async function getPayslipCount(search, month, year) {
   let query = 'SELECT COUNT(*) FROM payslips WHERE 1=1';
   const params = [];
@@ -345,52 +344,27 @@ async function getPayslipCount(search, month, year) {
   return result.rows[0].count;
 }
 
-// Get single payslip
-router.get('/payslips/:id', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM payslips WHERE payslip_id = $1', [req.params.id]);
-    if (result.rowCount === 0) return res.status(404).json({ error: 'Payslip not found' });
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error('Payslip fetch failed:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Mount the router
 app.use('/api', router);
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ error: 'Route not found' });
-});
-
-// Error handler
+// Error Handling
 app.use((err, req, res, next) => {
   console.error('Server error:', err);
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// Server startup
-async function startServer() {
-  let retries = 5;
-  while (retries) {
-    try {
-      await pool.query('SELECT 1');
-      console.log('Connected to database');
-      break;
-    } catch (err) {
-      retries--;
-      console.log(`Retries left: ${retries}`);
-      await new Promise(res => setTimeout(res, 5000));
-    }
-  }
+app.use((req, res) => {
+  res.status(404).json({ error: 'Route not found' });
+});
 
+// Server Startup
+async function startServer() {
   try {
     await initializeDatabase();
     const server = app.listen(PORT, '0.0.0.0', () => {
-      console.log(`Server running on port ${PORT}`);
+      console.log(`Server running on http://0.0.0.0:${PORT}`);
       console.log(`API Documentation: http://localhost:${PORT}/api-docs`);
+      console.log(`Health Check: http://localhost:${PORT}/health`);
+      console.log(`DB Health: http://localhost:${PORT}/db-health`);
     });
 
     process.on('SIGTERM', () => shutdown(server));
@@ -401,7 +375,6 @@ async function startServer() {
   }
 }
 
-// Graceful shutdown
 function shutdown(server) {
   console.log('Shutting down gracefully...');
   server.close(() => {
@@ -413,3 +386,4 @@ function shutdown(server) {
 }
 
 startServer();
+

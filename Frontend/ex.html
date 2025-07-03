@@ -361,16 +361,13 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script>
-document.addEventListener('DOMContentLoaded', () => {
+     document.addEventListener('DOMContentLoaded', () => {
     const { jsPDF } = window.jspdf;
 
     // Initialize logo image
     const logoImg = new Image();
-    logoImg.src = 'logo.png'; // Ensure logo.png is in the same directory as index.html
-    logoImg.crossOrigin = 'Anonymous'; // Set for potential CORS if served from a different origin
-    logoImg.onload = () => {
-        console.log(`[${new Date().toISOString()}] Logo loaded successfully`);
-    };
+    logoImg.crossOrigin = 'Anonymous';
+    logoImg.src = 'logo.png';
     logoImg.onerror = () => {
         console.warn(`[${new Date().toISOString()}] Logo failed to load from ./logo.png`);
     };
@@ -647,14 +644,6 @@ document.addEventListener('DOMContentLoaded', () => {
         docContent.style.width = '210mm';
         docContent.style.backgroundColor = '#fff';
         docContent.style.boxSizing = 'border-box';
-        docContent.style.position = 'absolute';
-        docContent.style.left = '-9999px'; // Move off-screen to prevent visibility
-
-        // Conditionally include logo only if it loaded successfully
-        const logoHtml = logoImg.complete && logoImg.naturalWidth !== 0
-            ? `<img id="company-logo" src="${logoImg.src}" style="height: 15mm; max-width: 35mm;" alt="Company Logo">`
-            : `<p style="font-weight: bold; font-size: 9pt; margin: 0;">Astrolite Tech Solutions Pvt Ltd</p>`;
-
         docContent.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5mm;">
                 <div>
@@ -663,7 +652,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <p style="font-size: 7pt; margin: 0;">Siddivinayaka Nagar, Survey of India,</p>
                     <p style="font-size: 7pt; margin: 0;">Madhapur, Hyderabad - 500081</p>
                 </div>
-                ${logoHtml}
+                <img id="company-logo" src="${logoImg.src}" style="height: 15mm; max-width: 35mm;" alt="Company Logo">
             </div>
             <hr style="border: 0.2mm solid #ccc; margin: 3mm 0;">
             <h2 style="text-align: center; font-size: 12pt; color: #333; margin: 0;">Payslip of ${monthYear}</h2>
@@ -775,8 +764,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const canvas = await html2canvas(docContent, {
                 scale: 2,
                 logging: true,
-                useCORS: true, // Enable CORS for images
-                allowTaint: false // Prevent tainting, but allow CORS images
+                useCORS: false,
+                allowTaint: true
             });
             const imgData = canvas.toDataURL('image/png');
             const pdf = new jsPDF('p', 'mm', 'a4');

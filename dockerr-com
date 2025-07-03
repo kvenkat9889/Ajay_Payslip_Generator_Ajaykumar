@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  backend:
+    container_name: payslip_backend1
+    build: ./Backend
+    ports:
+      - "3401:3401"
+    depends_on:
+      - postgres
+    env_file:
+      - ./server.env
+    volumes:
+      - ./upload:/app/upload
+    restart: always
+
+  frontend:
+    container_name: payslip_frontend1
+    build: ./Frontend
+    ports:
+      - "8008:80"
+    restart: always
+
+  hr_page:
+    container_name: payslip_hr_page1
+    build: ./HR_Page
+    ports:
+      - "8009:80"
+    restart: always
+
+  postgres:
+    container_name: payslip_postgres1
+    image: postgres:13
+    ports:
+      - "5401:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: new_employee_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: always
+
+volumes:
+  postgres_data:
+

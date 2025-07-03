@@ -10,3 +10,4 @@ COPY . .
 EXPOSE 3401
 
 CMD ["node", "server.js"]
+

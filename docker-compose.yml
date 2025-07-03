@@ -2,33 +2,62 @@ version: '3.8'
 
 services:
   backend:
-    container_name: payslip_backend1
+    container_name: payslip_backend
     build: ./Backend
     ports:
       - "3401:3401"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ./server.env
     environment:
-      - PGHOST=postgres
-      - PGUSER=postgres
-      - PGPASSWORD=admin123
-      - PGDATABASE=new_employee_db
-      - PGPORT=5432
+      - NODE_ENV=production
+    networks:
+      payslip-network:
+        aliases:
+          - backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://44.223.23.145:3401/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - ./Backend/upload:/app/upload
+    restart: unless-stopped
 
   frontend:
-    container_name: payslip_frontend1
+    container_name: payslip_frontend
     build: ./Frontend
     ports:
       - "8008:80"
+    networks:
+      payslip-network:
+        aliases:
+          - frontend
+    depends_on:
+      - backend
+    environment:
+      - BACKEND_URL=http://backend:3401
+    restart: unless-stopped
 
   hr_page:
-    container_name: payslip_hr_page1
+    container_name: payslip_hr_page
     build: ./HR_Page
     ports:
       - "8009:80"
+    networks:
+      payslip-network:
+        aliases:
+          - hrpage
+    depends_on:
+      - backend
+    environment:
+      - BACKEND_URL=http://backend:3401
+    restart: unless-stopped
 
   postgres:
-    container_name: payslip_postgres1
+    container_name: payslip_postgres
     image: postgres:13
     ports:
       - "5401:5432"
@@ -39,7 +68,25 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      payslip-network:
+        aliases:
+          - postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
 volumes:
   postgres_data:
+    driver: local
 
+networks:
+  payslip-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: "172.25.0.0/16"  # Changed from 172.20.0.0/16
+          gateway: "172.25.0.1"
